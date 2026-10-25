@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules
+dist
+.circle
+recovery_file*
+contracts/out
+contracts/cache
+cache
+.arc-studio/
+node_modules/
