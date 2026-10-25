@@ -74,7 +74,7 @@ Application and contract changes are made through Arc Studio. Later Arc Studio e
 
 ## Deployment links
 
-- Live app: TODO
+- Live app: https://plug-tawny.vercel.app
 - Public repository: https://github.com/JWattjr/plug
 - Arc Testnet contract: `0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa` (chain ID 5042002)
 - Arc Testnet contract explorer: https://explorer.testnet.arc.io/address/0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa

@@ -1,7 +1,7 @@
 # Plug - Arc Microgrants Round 2
 
 - Arc Studio project URL: https://studio.arc.io/app/49ce882a-a246-44f3-a76d-ce91a33aa51a
-- Live app URL: TODO
+- Live app URL: https://plug-tawny.vercel.app
 - Public repo URL: https://github.com/JWattjr/plug
 - Contract address (Arc mainnet): TODO
 - Example mainnet txs (explorer.arc.io links):
