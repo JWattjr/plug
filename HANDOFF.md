@@ -8,7 +8,7 @@
 
 Application and contract sources must continue to be authored in Arc Studio. This checkout is for documentation, GitHub publication, and Vercel hosting. The unused `scripts/compass-deploy.ts` TypeScript issue is outside the Vite build and is intentionally left unchanged per the build instructions.
 
-## Hosting verification
+## Initial hosting verification (2026-10-25, Arc Testnet)
 
 - Local `npm install --legacy-peer-deps`: passed.
 - Local `npx vite build`: passed; output in `dist/`.
@@ -21,3 +21,13 @@ Application and contract sources must continue to be authored in Arc Studio. Thi
 - Direct browser visit to `/offers`: rendered Live offers and the expected no-live-offers state on Arc Testnet.
 - Direct browser visit to `/checkout/0`: rendered the expected campaign-0-does-not-exist state on Arc Testnet.
 - Both routes loaded without Vercel authentication; campaign 0 has not been created, so this check does not claim a completed purchase.
+
+## Mainnet hosting update (2026-10-26)
+
+The live site now targets Arc mainnet through Vercel Production and Preview configuration. The initial testnet hosting notes above describe the previous deployment.
+
+- Contract: `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a`.
+- Deploy block: `27934341`.
+- Demo agent payout address: `0x535df2938c7596497600564b41d0e98a5ea6b13b`.
+- Mainnet contract and deployment transaction links were opened/confirmed on Arc Explorer.
+- Application and contract sources remain unchanged; environment changes require a fresh Vite build.

@@ -31,7 +31,7 @@ bun run contracts:test
 
 ### Environment variables
 
-All optional. Defaults point at the Arc Testnet deployment. Set them in `.env` (see `.env.example`).
+All optional for local development. Source defaults point at the Arc Testnet deployment (see `.env.example`). The live Vercel site uses Arc mainnet through the Production and Preview environment variables below; Vite embeds them at build time.
 
 - `VITE_PLUG_CHAIN`: `arc-testnet` (default) or `arc-mainnet`.
 - `VITE_PLUG_ADDRESS`: address of the deployed PlugCampaigns contract.
@@ -45,9 +45,15 @@ Moving to mainnet needs only these variables, no code change: set the chain to `
 
 Deep links such as `/checkout/3` need the host to serve `index.html` for unknown paths. `vercel.json` (Vercel) and `public/_redirects` (Netlify) already do this.
 
-### Contract
+### Contracts
 
-The contract lives in `contracts/PlugCampaigns.sol` with its tests in `contracts/test/`. Arc Testnet deployment: `0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa`.
+The contract lives in `contracts/PlugCampaigns.sol` with its tests in `contracts/test/`.
+
+- Arc mainnet: `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a` ([contract explorer](https://explorer.arc.io/address/0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a))
+- Deploy tx: https://explorer.arc.io/tx/0x10683b590fbaa133c43ae635d28a3d330fee21c04ae924a5156b737db4d36fd1
+- Arc Testnet: `0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa` ([contract explorer](https://explorer.testnet.arc.io/address/0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa))
+
+The mainnet runtime bytecode was verified to be identical to the Arc Studio build that passed 89/89 tests.
 
 
 ## Pay-per-sale economics
@@ -78,9 +84,20 @@ Application and contract changes are made through Arc Studio. Later Arc Studio e
 - Public repository: https://github.com/JWattjr/plug
 - Arc Testnet contract: `0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa` (chain ID 5042002)
 - Arc Testnet contract explorer: https://explorer.testnet.arc.io/address/0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa
-- Arc mainnet contract: TODO
+- Arc mainnet contract: `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a`
+- Arc mainnet contract explorer: https://explorer.arc.io/address/0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a
+- Mainnet deploy tx: https://explorer.arc.io/tx/0x10683b590fbaa133c43ae635d28a3d330fee21c04ae924a5156b737db4d36fd1
 
-The live app uses Arc Testnet defaults with no environment variables configured. Mainnet deployment details remain TODO.
+The live app uses Arc mainnet. Vercel Production and Preview use the following public build configuration:
+
+| Variable | Value |
+| --- | --- |
+| `VITE_PLUG_CHAIN` | `arc-mainnet` |
+| `VITE_PLUG_ADDRESS` | `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a` |
+| `VITE_PLUG_DEPLOY_BLOCK` | `27934341` |
+| `VITE_DEMO_AGENT_ADDRESS` | `0x535df2938c7596497600564b41d0e98a5ea6b13b` |
+
+After changing these variables, rebuild the production deployment without build cache so Vite embeds the new values.
 
 ### Build and test
 
