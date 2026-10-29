@@ -31,3 +31,18 @@ The live site now targets Arc mainnet through Vercel Production and Preview conf
 - Demo agent payout address: `0x535df2938c7596497600564b41d0e98a5ea6b13b`.
 - Mainnet contract and deployment transaction links were opened/confirmed on Arc Explorer.
 - Application and contract sources remain unchanged; environment changes require a fresh Vite build.
+
+## Plug v2 hosting update (2026-10-29)
+
+This update supersedes the earlier v1 live configuration described above.
+
+- Arc Studio export committed unchanged as `0eaad62`: `Plug v2: buyer protection (built in Arc Studio)`.
+- Current Arc mainnet contract: `0xaa5364de35d65633ad031ff4da4f941e0de6f913`, deploy block `28454210`.
+- Production and Preview use `VITE_PLUG_CHAIN=arc-mainnet`, the current v2 address/block, and demo agent `0x535df2938c7596497600564b41d0e98a5ea6b13b`.
+- Vercel install command: `npm install --legacy-peer-deps`; build command: `npm run build`; output: `dist`.
+- A fresh production build succeeded with build cache disabled.
+- Browser checks passed for `/`, `/offers`, `/advertise`, `/orders`, `/arbiter`, `/activity`, and `/agent`, including refresh on each route.
+- All seven pages showed Arc mainnet and the v2 contract explorer link in the footer; no browser console errors were observed during these checks.
+- All 178 protected export files, including AGENTS.md, were verified unchanged during hosting and documentation work.
+- The secrets check found no project credentials or non-example environment files. Packaged dependency test fixtures remain excluded with the user's prior approval.
+- The remote npm install reported 88 dependency audit findings: 12 low, 24 moderate, and 52 high. Review dependency changes through Arc Studio; no package or app fixes were made here.
