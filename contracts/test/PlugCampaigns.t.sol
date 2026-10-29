@@ -25,9 +25,9 @@ contract PlugCampaignsTest is PlugCampaignsBase {
         uint64 end = _end();
         uint256 advBefore = usdc.balanceOf(advertiser);
         vm.expectEmit(true, true, true, true, address(plug));
-        emit PlugCampaigns.CampaignCreated(0, advertiser, PRICE, BPS, BUDGET, end);
+        emit PlugCampaigns.CampaignCreated(0, advertiser, PRICE, BPS, BUDGET, end, 0, address(0));
         vm.prank(advertiser);
-        uint256 id = plug.createCampaign("Title", "https://x.y", PRICE, BPS, BUDGET, end);
+        uint256 id = plug.createCampaign("Title", "https://x.y", PRICE, BPS, BUDGET, end, 0, address(0));
 
         assertEq(id, 0);
         assertEq(plug.campaignCount(), 1);
@@ -54,7 +54,7 @@ contract PlugCampaignsTest is PlugCampaignsBase {
 
     function test_Create_ZeroBudgetZeroBpsEmptyMetadataAllowed() public {
         vm.prank(advertiser);
-        uint256 id = plug.createCampaign("", "", 1, 0, 0, _end());
+        uint256 id = plug.createCampaign("", "", 1, 0, 0, _end(), 0, address(0));
         assertEq(plug.getCampaign(id).budgetRemaining, 0);
         assertEq(usdc.balanceOf(address(plug)), 0);
     }
@@ -63,24 +63,24 @@ contract PlugCampaignsTest is PlugCampaignsBase {
         _create(PRICE, 5000, BUDGET); // ok
         vm.prank(advertiser);
         vm.expectRevert(abi.encodeWithSelector(PlugCampaigns.InvalidCommissionBps.selector, uint16(5001)));
-        plug.createCampaign("t", "u", PRICE, 5001, BUDGET, _end());
+        plug.createCampaign("t", "u", PRICE, 5001, BUDGET, _end(), 0, address(0));
     }
 
     function test_Create_ZeroPriceReverts() public {
         vm.prank(advertiser);
         vm.expectRevert(PlugCampaigns.InvalidPrice.selector);
-        plug.createCampaign("t", "u", 0, BPS, BUDGET, _end());
+        plug.createCampaign("t", "u", 0, BPS, BUDGET, _end(), 0, address(0));
     }
 
     function test_Create_EndTimeNotInFutureReverts() public {
         uint64 nowTs = uint64(block.timestamp);
         vm.startPrank(advertiser);
         vm.expectRevert(abi.encodeWithSelector(PlugCampaigns.InvalidEndTime.selector, nowTs));
-        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, nowTs);
+        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, nowTs, 0, address(0));
         vm.expectRevert(abi.encodeWithSelector(PlugCampaigns.InvalidEndTime.selector, nowTs - 1));
-        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, nowTs - 1);
+        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, nowTs - 1, 0, address(0));
         // now + 1 is valid
-        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, nowTs + 1);
+        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, nowTs + 1, 0, address(0));
         vm.stopPrank();
     }
 
@@ -88,9 +88,9 @@ contract PlugCampaignsTest is PlugCampaignsBase {
         string memory ok = string(new bytes(128));
         string memory bad = string(new bytes(129));
         vm.startPrank(advertiser);
-        plug.createCampaign(ok, "u", PRICE, BPS, BUDGET, _end());
+        plug.createCampaign(ok, "u", PRICE, BPS, BUDGET, _end(), 0, address(0));
         vm.expectRevert(abi.encodeWithSelector(PlugCampaigns.TitleTooLong.selector, 129));
-        plug.createCampaign(bad, "u", PRICE, BPS, BUDGET, _end());
+        plug.createCampaign(bad, "u", PRICE, BPS, BUDGET, _end(), 0, address(0));
         vm.stopPrank();
     }
 
@@ -98,9 +98,9 @@ contract PlugCampaignsTest is PlugCampaignsBase {
         string memory ok = string(new bytes(512));
         string memory bad = string(new bytes(513));
         vm.startPrank(advertiser);
-        plug.createCampaign("t", ok, PRICE, BPS, BUDGET, _end());
+        plug.createCampaign("t", ok, PRICE, BPS, BUDGET, _end(), 0, address(0));
         vm.expectRevert(abi.encodeWithSelector(PlugCampaigns.OfferUrlTooLong.selector, 513));
-        plug.createCampaign("t", bad, PRICE, BPS, BUDGET, _end());
+        plug.createCampaign("t", bad, PRICE, BPS, BUDGET, _end(), 0, address(0));
         vm.stopPrank();
     }
 
@@ -109,7 +109,7 @@ contract PlugCampaignsTest is PlugCampaignsBase {
         usdc.approve(address(plug), 0);
         vm.prank(advertiser);
         vm.expectRevert();
-        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, _end());
+        plug.createCampaign("t", "u", PRICE, BPS, BUDGET, _end(), 0, address(0));
         assertEq(plug.campaignCount(), 0);
     }
 

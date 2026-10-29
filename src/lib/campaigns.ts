@@ -14,7 +14,15 @@ export interface Campaign {
   active: boolean
   sales: bigint
   commissionPaid: bigint
+  /** Seconds the buyer's money is held. Zero means instant settlement. */
+  protectionWindow: bigint
+  /** Decides contested disputes. Zero address when there is no protection. */
+  arbiter: `0x${string}`
+  pendingOrders: bigint
+  refundedCount: bigint
 }
+
+export const isProtected = (campaign: Campaign): boolean => campaign.protectionWindow > 0n
 
 /** Open for purchases right now: not closed and not past its end time. */
 export function isLive(campaign: Campaign, now: number): boolean {
@@ -60,8 +68,18 @@ export function toOfferJson(campaign: Campaign) {
       perSaleRaw: commissionPerSale(campaign).toString(),
       payable: canPayCommission(campaign),
     },
+    protection: isProtected(campaign)
+      ? { windowSeconds: Number(campaign.protectionWindow), arbiter: campaign.arbiter, pendingOrders: campaign.pendingOrders.toString(), refunds: campaign.refundedCount.toString() }
+      : null,
     budgetRemainingRaw: campaign.budgetRemaining.toString(),
     endsAt: Number(campaign.endTime),
-    settle: { contract: PLUG.address, chainId: PLUG.chainId, call: `buy(${campaign.id.toString()}, <referrer>)` },
+    settle: {
+      contract: PLUG.address,
+      chainId: PLUG.chainId,
+      call: `buy(${campaign.id.toString()}, <referrer>)`,
+      note: isProtected(campaign)
+        ? 'Protected: the buyer pays into escrow and the order releases after the window unless disputed. buy returns the orderId.'
+        : 'Instant: the seller is paid in the same transaction.',
+    },
   }
 }

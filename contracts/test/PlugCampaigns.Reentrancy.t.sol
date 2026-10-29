@@ -37,7 +37,7 @@ contract PlugCampaignsReentrancyTest is Test {
 
     function _create(address adv) internal returns (uint256 id) {
         bytes memory data = abi.encodeCall(
-            PlugCampaigns.createCampaign, ("t", "u", PRICE, uint16(1000), BUDGET, uint64(block.timestamp + 1 days))
+            PlugCampaigns.createCampaign, ("t", "u", PRICE, uint16(1000), BUDGET, uint64(block.timestamp + 1 days), uint64(0), address(0))
         );
         if (adv == address(attacker)) {
             (bool ok, bytes memory ret) = attacker.call_(data);

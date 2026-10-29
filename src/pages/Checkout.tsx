@@ -1,20 +1,21 @@
 import { useRef, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { erc20Abi, isAddress, parseEventLogs } from 'viem'
 import { usePublicClient } from 'wagmi'
-import { ArrowUpRight, Bot, Megaphone, Store } from 'lucide-react'
+import { ArrowUpRight, Bot, Megaphone, ShieldCheck, Store } from 'lucide-react'
 import { ErrorNote, Page, Skeleton, Spinner, SponsoredBadge, Step, TxLink, TxNotice, type StepStatus } from '@/components/ui'
 import { SplitVisual } from '@/components/SplitVisual'
+import { ProtectionBadge } from '@/components/ProtectionBadge'
 import { PLUG_QUERY_KEY, useNow } from '@/hooks/useCampaigns'
 import { useTx } from '@/hooks/useTx'
 import { useUsdcAllowance, useUsdcBalance } from '@/hooks/useUsdc'
 import { useWalletGate } from '@/hooks/useWalletGate'
-import { isLive, safeHref, type Campaign } from '@/lib/campaigns'
+import { isLive, isProtected, safeHref, type Campaign } from '@/lib/campaigns'
 import { explainCommission, UNDELIVERABLE_REASON } from '@/lib/commission'
 import { fmtBps, fmtUsdc, sameAddress, shortAddress } from '@/lib/money'
 import { plugAbi } from '@/lib/plugAbi'
-import { fmtTimeLeft } from '@/lib/time'
+import { fmtTimeLeft, fmtWindowLong } from '@/lib/time'
 import { PLUG } from '@/plug.config'
 
 interface Receipt {
@@ -54,6 +55,7 @@ export default function Checkout() {
   const allowance = useUsdcAllowance(gate.address)
   const approveTx = useTx()
   const buyTx = useTx()
+  const navigate = useNavigate()
   const [approved, setApproved] = useState(0n)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const snapshot = useRef<Campaign | null>(null)
@@ -97,6 +99,9 @@ export default function Checkout() {
   const effectiveAllowance = (allowance.data ?? 0n) > approved ? (allowance.data ?? 0n) : approved
   const needsApproval = effectiveAllowance < price
   const busy = approveTx.busy || buyTx.busy
+  const protectedOffer = isProtected(campaign)
+  const buyerIsArbiter = protectedOffer && sameAddress(campaign.arbiter, gate.address)
+  const windowText = fmtWindowLong(campaign.protectionWindow)
   const endedReason = !campaign.active ? 'This campaign was closed by the seller.' : !live ? 'This campaign has ended.' : undefined
 
   async function approve() {
@@ -120,6 +125,11 @@ export default function Checkout() {
       }),
     )
     if (!done) return
+    if (protectedOffer) {
+      const [placed] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'OrderPlaced' }).filter((log) => sameAddress(log.address, PLUG.address))
+      if (placed) navigate(`/orders/${placed.args.orderId.toString()}`)
+      return
+    }
     const [event] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'Purchase' }).filter(
       (log) => sameAddress(log.address, PLUG.address),
     )
@@ -149,8 +159,8 @@ export default function Checkout() {
     )
   else
     action = (
-      <button className="btn btn-primary w-full" disabled={!live || insufficient || busy} onClick={() => void buy()}>
-        {buyTx.busy && <Spinner />} Step 2 of 2: Buy for {fmtUsdc(price)}
+      <button className="btn btn-primary w-full" disabled={!live || insufficient || busy || buyerIsArbiter} onClick={() => void buy()}>
+        {buyTx.busy && <Spinner />} Step 2 of 2: {protectedOffer ? 'Pay into escrow' : 'Buy'} for {fmtUsdc(price)}
       </button>
     )
 
@@ -166,6 +176,14 @@ export default function Checkout() {
           <div className="flex items-baseline gap-2">
             <span className="display text-5xl font-bold tabular-nums">{fmtUsdc(price).replace(' USDC', '')}</span>
             <span style={{ color: 'var(--subtle)' }}>USDC</span>
+          </div>
+          <div className="space-y-1.5">
+            <ProtectionBadge campaign={campaign} />
+            {protectedOffer && (
+              <p className="text-xs tabular-nums" style={{ color: 'var(--subtle)' }} data-testid="order-counts">
+                {campaign.pendingOrders.toString()} pending order{campaign.pendingOrders === 1n ? '' : 's'} · {campaign.refundedCount.toString()} refund{campaign.refundedCount === 1n ? '' : 's'} so far
+              </p>
+            )}
           </div>
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div className="inner p-3">
@@ -223,14 +241,25 @@ export default function Checkout() {
 
               <div className="inner space-y-2 p-4 text-sm tabular-nums">
                 <div className="flex justify-between"><span style={{ color: 'var(--muted)' }}>You pay</span><span className="font-semibold">{fmtUsdc(price)}</span></div>
-                <div className="flex justify-between"><span style={{ color: 'var(--muted)' }}>Seller receives</span><span style={{ color: 'var(--accent)' }}>{fmtUsdc(price)}</span></div>
+                <div className="flex justify-between"><span style={{ color: 'var(--muted)' }}>{protectedOffer ? 'Seller receives after the window' : 'Seller receives'}</span><span style={{ color: 'var(--accent)' }}>{fmtUsdc(price)}</span></div>
                 <div className="flex justify-between">
-                  <span style={{ color: 'var(--muted)' }}>Agent earns</span>
+                  <span style={{ color: 'var(--muted)' }}>{protectedOffer ? 'Agent earns if the sale sticks' : 'Agent earns'}</span>
                   <span style={{ color: outlook.commission > 0n ? 'var(--agent)' : 'var(--subtle)' }}>{outlook.commission > 0n ? fmtUsdc(outlook.commission) : 'No commission'}</span>
                 </div>
                 {outlook.reason && <p className="pt-1 text-xs" style={{ color: 'var(--subtle)' }}>{outlook.reason}</p>}
               </div>
 
+              {protectedOffer && (
+                <div className="rounded-2xl border p-4" style={{ background: 'rgba(141,216,159,0.08)', borderColor: 'rgba(141,216,159,0.4)' }} data-testid="hold-notice">
+                  <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--success)' }}>
+                    <ShieldCheck className="size-4" /> Buyer protection
+                  </p>
+                  <p className="mt-1 text-pretty text-sm" style={{ color: 'var(--muted)' }}>
+                    Your money is held for {windowText}. Confirm when it arrives, or dispute. If you do nothing, the seller is paid when the window ends.
+                  </p>
+                </div>
+              )}
+              {buyerIsArbiter && <ErrorNote>You are this campaign&apos;s arbiter, so you cannot buy from it.</ErrorNote>}
               {endedReason && <ErrorNote>{endedReason}</ErrorNote>}
               {gate.isConnected && !endedReason && insufficient && haveBalance !== undefined && (
                 <ErrorNote>Insufficient USDC. You have {fmtUsdc(haveBalance)} and need {fmtUsdc(price)}. Use Get test USDC in the Arc Studio sidebar.</ErrorNote>

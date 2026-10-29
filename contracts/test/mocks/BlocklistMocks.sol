@@ -15,7 +15,7 @@ contract BlocklistUSDC is MockUSDC {
         isBlocklisted[who] = on;
     }
 
-    function _update(address from, address to, uint256 value) internal override {
+    function _update(address from, address to, uint256 value) internal virtual override {
         if (isBlocklisted[from]) revert Blocklisted(from);
         if (isBlocklisted[to]) revert Blocklisted(to);
         super._update(from, to, value);

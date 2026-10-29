@@ -1,120 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {PlugCampaigns} from "../PlugCampaigns.sol";
 import {BlocklistUSDC} from "./mocks/BlocklistMocks.sol";
-
-/// @dev Drives bounded random actions against PlugCampaigns.
-contract PlugHandler is Test {
-    PlugCampaigns public plug;
-    BlocklistUSDC public usdc;
-
-    address[4] public actors;
-
-    uint256 public ghostSales;
-    /// Count of sales where the advertiser's balance change was not exactly (buyer == advertiser ? 0 : +price).
-    uint256 public ghostBadAdvertiserDelta;
-    /// Count of sales where the buyer's balance change broke the expected value.
-    uint256 public ghostBadBuyerDelta;
-    /// Count of successful sales where a blocklisted referrer nonetheless got commission accounted.
-    uint256 public ghostBlockedRefPaid;
-    /// Count of successful sales where referrerEarnings delta != commissionPaid delta.
-    uint256 public ghostEarningsMismatch;
-    /// Count of times the blocklist action flipped a status.
-    uint256 public ghostBlockToggles;
-    /// Count of successful sales whose referrer was blocklisted at the time (commission must have failed).
-    uint256 public ghostSalesWithBlockedRef;
-    uint256 public constant INITIAL_BALANCE = 1e30;
-
-    constructor(PlugCampaigns plug_, BlocklistUSDC usdc_) {
-        plug = plug_;
-        usdc = usdc_;
-        for (uint256 i; i < 4; i++) {
-            actors[i] = makeAddr(string.concat("actor", vm.toString(i)));
-            usdc.mint(actors[i], INITIAL_BALANCE);
-            vm.prank(actors[i]);
-            usdc.approve(address(plug), type(uint256).max);
-        }
-    }
-
-    function _actor(uint256 seed) internal view returns (address) {
-        return actors[seed % 4];
-    }
-
-    function _id(uint256 seed) internal view returns (bool ok, uint256 id) {
-        uint256 n = plug.campaignCount();
-        if (n == 0) return (false, 0);
-        uint256 window = n < 4 ? n : 4; // bias towards recent campaigns so buys/topUps/ends hit live ones
-        return (true, n - 1 - (seed % window));
-    }
-
-    function create(uint256 aSeed, uint256 price, uint16 bps, uint256 budget, uint256 dur) external {
-        price = bound(price, 1, 1e12);
-        bps = uint16(bound(bps, 0, 5000));
-        budget = bound(budget, 0, 1e12);
-        dur = bound(dur, 1, 3 days);
-        vm.prank(_actor(aSeed));
-        plug.createCampaign("t", "u", price, bps, budget, uint64(block.timestamp + dur));
-    }
-
-    function buy(uint256 aSeed, uint256 idSeed, uint256 refSeed) external {
-        (bool ok, uint256 id) = _id(idSeed);
-        if (!ok) return;
-        PlugCampaigns.Campaign memory c = plug.getCampaign(id);
-        uint256 r = refSeed % 6;
-        address ref = r == 0 ? address(0) : r == 5 ? c.advertiser : actors[r - 1];
-        address who = _actor(aSeed);
-        uint256 advBefore = usdc.balanceOf(c.advertiser);
-        uint256 buyerBefore = usdc.balanceOf(who);
-        uint256 paidBefore = c.commissionPaid;
-        uint256 earnedBefore = plug.referrerEarnings(ref);
-        bool refBlocked = ref != address(0) && usdc.isBlocklisted(ref);
-        vm.prank(who);
-        try plug.buy(id, ref) {
-            PlugCampaigns.Campaign memory c2 = plug.getCampaign(id);
-            if (refBlocked) {
-                ghostSalesWithBlockedRef++;
-                if (c2.commissionPaid != paidBefore) ghostBlockedRefPaid++;
-            }
-            if (plug.referrerEarnings(ref) - earnedBefore != c2.commissionPaid - paidBefore) ghostEarningsMismatch++;
-            // Advertiser receives exactly price per sale (a self-buy nets zero; commission never goes to it).
-            uint256 expAdv = who == c.advertiser ? advBefore : advBefore + c.price;
-            if (usdc.balanceOf(c.advertiser) != expAdv) ghostBadAdvertiserDelta++;
-            // Buyer pays exactly price; if buyer is also an eligible commission recipient it cannot be (excluded).
-            uint256 expBuyer = who == c.advertiser ? buyerBefore : buyerBefore - c.price;
-            if (usdc.balanceOf(who) != expBuyer) ghostBadBuyerDelta++;
-            ghostSales++;
-        } catch {}
-    }
-
-    function topUp(uint256 idSeed, uint256 amount) external {
-        (bool ok, uint256 id) = _id(idSeed);
-        if (!ok) return;
-        PlugCampaigns.Campaign memory c = plug.getCampaign(id);
-        vm.prank(c.advertiser);
-        try plug.topUp(id, bound(amount, 0, 1e12)) {} catch {}
-    }
-
-    function end(uint256 aSeed, uint256 idSeed) external {
-        (bool ok, uint256 id) = _id(idSeed);
-        if (!ok) return;
-        vm.prank(_actor(aSeed));
-        try plug.endCampaign(id) {} catch {}
-    }
-
-    /// Toggle the issuer blocklist for one of the actors or for the PlugCampaigns contract itself.
-    function blocklist(uint256 seed, bool on) external {
-        uint256 i = seed % 5;
-        address who = i == 4 ? address(plug) : actors[i];
-        usdc.setBlocklisted(who, on);
-        ghostBlockToggles++;
-    }
-
-    function warp(uint256 secs) external {
-        skip(bound(secs, 0, 1 days));
-    }
-}
+import {PlugHandler} from "./PlugCampaigns.Handler.t.sol";
 
 contract PlugCampaignsInvariantTest is Test {
     PlugCampaigns internal plug;
@@ -127,61 +17,205 @@ contract PlugCampaignsInvariantTest is Test {
         plug = new PlugCampaigns(address(usdc));
         handler = new PlugHandler(plug, usdc);
         targetContract(address(handler));
+        bytes4[] memory sels = new bytes4[](24);
+        sels[0] = PlugHandler.create.selector;
+        sels[1] = PlugHandler.buy.selector;
+        sels[2] = PlugHandler.topUp.selector;
+        sels[3] = PlugHandler.end.selector;
+        sels[4] = PlugHandler.confirm.selector;
+        sels[5] = PlugHandler.release.selector;
+        sels[6] = PlugHandler.dispute.selector;
+        sels[7] = PlugHandler.sellerRefund.selector;
+        sels[8] = PlugHandler.contest.selector;
+        sels[9] = PlugHandler.claimRefund.selector;
+        sels[10] = PlugHandler.resolve.selector;
+        sels[11] = PlugHandler.blocklist.selector;
+        sels[12] = PlugHandler.warp.selector;
+        sels[13] = PlugHandler.buy.selector; // buy twice as likely
+        sels[14] = PlugHandler.withdrawClosed.selector;
+        sels[15] = PlugHandler.warpToArbiterDeadline.selector;
+        sels[16] = PlugHandler.resolve.selector; // resolve more often so it lands on the window edge
+        sels[17] = PlugHandler.contestFlow.selector;
+        sels[18] = PlugHandler.creditScenario.selector;
+        sels[19] = PlugHandler.claimOwedRefund.selector;
+        sels[20] = PlugHandler.blockedBuyerScenario.selector;
+        sels[21] = PlugHandler.blockedBuyerScenario.selector; // scenario twice as likely
+        sels[22] = PlugHandler.claimOwedRefund.selector;
+        sels[23] = PlugHandler.dispute.selector;
+        targetSelector(FuzzSelector({addr: address(handler), selectors: sels}));
     }
 
-    /// Conservation: contract USDC == sum of budgetRemaining across all campaigns.
-    function invariant_BalanceEqualsSumOfBudgets() public view {
+    /// CORE: token balance == sum(budgetRemaining) + reservedCommission + escrowedPrice + owedRefunds, always.
+    function invariant_BalanceEqualsBudgetsPlusReservedPlusEscrow() public view {
         uint256 sum;
         uint256 n = plug.campaignCount();
         for (uint256 i; i < n; i++) sum += plug.getCampaign(i).budgetRemaining;
-        assertEq(usdc.balanceOf(address(plug)), sum);
+        assertEq(
+            usdc.balanceOf(address(plug)),
+            sum + plug.reservedCommission() + plug.escrowedPrice() + plug.owedRefunds()
+        );
     }
 
-    function invariant_InactiveCampaignsHoldNoBudget() public view {
-        uint256 n = plug.campaignCount();
-        for (uint256 i; i < n; i++) {
-            PlugCampaigns.Campaign memory c = plug.getCampaign(i);
-            if (!c.active) assertEq(c.budgetRemaining, 0);
+    /// escrowedPrice / reservedCommission equal the sums over unsettled orders; status counters and
+    /// per-campaign pendingOrders / refundedCount / sales match the order book exactly.
+    function invariant_OrderBookMatchesCountersAndEscrow() public view {
+        uint256 nc = plug.campaignCount();
+        uint256 no = plug.orderCount();
+        assertEq(no, handler.ghostOrdersPlaced(), "order count");
+        uint256[] memory pend = new uint256[](nc);
+        uint256[] memory refd = new uint256[](nc);
+        uint256[] memory rel = new uint256[](nc);
+        uint256 escrow;
+        uint256 reserved;
+        uint256 releasedTotal;
+        uint256 refundedTotal;
+        for (uint256 i; i < no; i++) {
+            PlugCampaigns.Order memory o = plug.getOrder(i);
+            if (o.status == PlugCampaigns.Status.Released) {
+                rel[o.campaignId]++;
+                releasedTotal++;
+            } else if (o.status == PlugCampaigns.Status.Refunded) {
+                refd[o.campaignId]++;
+                refundedTotal++;
+            } else {
+                pend[o.campaignId]++;
+                escrow += o.price;
+                reserved += o.commission;
+            }
         }
+        assertEq(plug.escrowedPrice(), escrow, "escrowedPrice == sum of unsettled prices");
+        assertEq(plug.reservedCommission(), reserved, "reservedCommission == sum of unsettled commissions");
+        assertEq(releasedTotal, handler.ghostReleasedOrders(), "released outcomes");
+        assertEq(refundedTotal, handler.ghostRefundedOrders(), "refunded outcomes");
+        uint256 salesTotal;
+        for (uint256 i; i < nc; i++) {
+            PlugCampaigns.Campaign memory c = plug.getCampaign(i);
+            (uint256 p, uint256 r) = plug.campaignStats(i);
+            assertEq(p, pend[i], "pendingOrders == unsettled count");
+            assertEq(c.pendingOrders, pend[i]);
+            assertEq(r, refd[i], "refundedCount == refunded count");
+            assertEq(plug.ordersOfCampaign(i).length, pend[i] + refd[i] + rel[i]);
+            if (c.protectionWindow == 0) assertEq(c.arbiter, address(0));
+            else assertEq(c.sales, rel[i], "windowed sales == released orders");
+            salesTotal += c.sales;
+        }
+        assertEq(salesTotal, handler.ghostInstantSales() + releasedTotal, "sales == instant + released");
     }
 
-    /// Advertiser receives exactly price per successful sale; the buyer pays exactly price.
-    function invariant_AdvertiserReceivesExactlyPricePerSale() public view {
-        assertEq(handler.ghostBadAdvertiserDelta(), 0);
-        assertEq(handler.ghostBadBuyerDelta(), 0);
+    /// owedRefunds == sum of refundOwedOf over every order; a credit exists only on a Refunded order
+    /// and never exceeds that order's price.
+    function invariant_OwedRefundsEqualSumOfPerOrderCredits() public view {
+        uint256 sum;
+        uint256 no = plug.orderCount();
+        for (uint256 i; i < no; i++) {
+            uint256 owed = plug.refundOwedOf(i);
+            if (owed != 0) {
+                PlugCampaigns.Order memory o = plug.getOrder(i);
+                assertTrue(o.status == PlugCampaigns.Status.Refunded, "refundOwedOf non-zero only if Refunded");
+                assertEq(owed, o.price, "credit is exactly the order price");
+            }
+            sum += owed;
+        }
+        assertEq(plug.owedRefunds(), sum, "owedRefunds == sum(refundOwedOf)");
     }
 
-    /// Token conservation across the closed system of actors + contract.
-    function invariant_TotalSupplyConserved() public view {
-        uint256 total = usdc.balanceOf(address(plug));
-        for (uint256 i; i < 4; i++) total += usdc.balanceOf(handler.actors(i));
-        assertEq(total, 4 * handler.INITIAL_BALANCE() + 0);
-    }
-
-    /// Sum of per-referrer lifetime earnings (over handler actors) == sum of commissionPaid.
-    function invariant_EarningsEqualCommissionPaid() public view {
+    /// Sum of referrerEarnings == sum of commissionPaid == commissions actually delivered (measured
+    /// from referrer token balances); commission never exceeds 50% of settled revenue.
+    function invariant_EarningsEqualCommissionDelivered() public view {
         uint256 paid;
         uint256 n = plug.campaignCount();
         for (uint256 i; i < n; i++) {
             PlugCampaigns.Campaign memory c = plug.getCampaign(i);
             paid += c.commissionPaid;
-            assertLe(c.commissionPaid * 2, c.sales * c.price); // commission <= 50% of revenue
+            assertLe(c.commissionPaid * 2, c.sales * c.price);
         }
         uint256 earned;
         for (uint256 i; i < 4; i++) earned += plug.referrerEarnings(handler.actors(i));
-        assertEq(earned, paid);
+        assertEq(earned, paid, "earnings == commissionPaid");
+        assertEq(paid, handler.ghostDelivered(), "commissionPaid == delivered");
     }
 
-    /// A blocklisted referrer is never credited commission; earnings always move in lock-step with commissionPaid.
-    function invariant_BlocklistedReferrerNeverCredited() public view {
-        assertEq(handler.ghostBlockedRefPaid(), 0);
-        assertEq(handler.ghostEarningsMismatch(), 0);
+    /// Arbiters are never paid anything: their balance never increases (it is always zero).
+    function invariant_ArbitersNeverReceiveFunds() public view {
+        for (uint256 i; i < 2; i++) {
+            assertEq(usdc.balanceOf(handler.arbs(i)), 0);
+            assertEq(plug.referrerEarnings(handler.arbs(i)), 0);
+        }
     }
 
-    function invariant_CampaignSalesMatchGhost() public view {
-        uint256 s;
+    /// A closed campaign only holds budget when the advertiser (or contract) was blocklisted at some point.
+    function invariant_InactiveCampaignsHoldNoBudgetUnlessUndeliverable() public view {
         uint256 n = plug.campaignCount();
-        for (uint256 i; i < n; i++) s += plug.getCampaign(i).sales;
-        assertEq(s, handler.ghostSales());
+        for (uint256 i; i < n; i++) {
+            PlugCampaigns.Campaign memory c = plug.getCampaign(i);
+            if (!c.active && c.budgetRemaining != 0) {
+                assertTrue(handler.everBlocked(c.advertiser) || handler.everBlocked(address(plug)));
+            }
+        }
+    }
+
+    /// Token conservation across the closed system of actors + arbiters + contract.
+    function invariant_TotalSupplyConserved() public view {
+        uint256 total = usdc.balanceOf(address(plug));
+        for (uint256 i; i < 4; i++) total += usdc.balanceOf(handler.actors(i));
+        for (uint256 i; i < 2; i++) total += usdc.balanceOf(handler.arbs(i));
+        assertEq(total, 4 * handler.INITIAL_BALANCE());
+    }
+
+    /// Per-action payout checks inside the handler never flagged a violation.
+    function invariant_NoPayoutOrTransitionViolations() public view {
+        assertEq(handler.ghostBadAdvertiserDelta(), 0, "advertiser/seller payout");
+        assertEq(handler.ghostBadBuyerDelta(), 0, "buyer payout");
+        assertEq(handler.ghostBlockedRefPaid(), 0, "blocklisted referrer credited");
+        assertEq(handler.ghostEarningsMismatch(), 0, "earnings vs delivered");
+        assertEq(handler.ghostBadTransition(), 0, "illegal status transition");
+        assertEq(handler.ghostBadOrderAccounting(), 0, "per-action counters");
+        assertEq(handler.ghostBadWithdraw(), 0, "withdrawClosedBudget");
+        assertEq(handler.ghostBadSelfReferrer(), 0, "contract-as-referrer");
+        assertEq(handler.ghostBadArbiterWindow(), 0, "arbiter window");
+        assertEq(handler.ghostBadOwed(), 0, "owed refund bookkeeping / claimOwedRefund");
+    }
+
+    /// The contract itself can never be paid or credited as a referrer, however it is supplied.
+    function invariant_ContractNeverEarnsAsReferrer() public view {
+        assertEq(plug.referrerEarnings(address(plug)), 0);
+    }
+
+    /// A closed campaign's credit is bounded by what it could ever have received back, and an
+    /// active campaign is never withdrawn from: inactive budget only exists if undeliverable.
+    function invariant_ClosedBudgetIsAlwaysWithdrawableByAnyoneWhenPayable() public {
+        uint256 n = plug.campaignCount();
+        for (uint256 i; i < n; i++) {
+            PlugCampaigns.Campaign memory c = plug.getCampaign(i);
+            if (c.active || c.budgetRemaining == 0) continue;
+            if (usdc.isBlocklisted(c.advertiser) || usdc.isBlocklisted(address(plug))) continue;
+            uint256 snap = vm.snapshotState();
+            uint256 before = usdc.balanceOf(c.advertiser);
+            vm.prank(address(0xBEEF));
+            plug.withdrawClosedBudget(i);
+            assertEq(usdc.balanceOf(c.advertiser), before + c.budgetRemaining, "advertiser paid exactly the credit");
+            vm.revertToState(snap);
+        }
+    }
+
+    /// Coverage summary (visible with -vv): confirms windowed paths and every order action are exercised.
+    function afterInvariant() public view {
+        console.log("campaigns", plug.campaignCount());
+        console.log("orders placed", handler.ghostOrdersPlaced());
+        console.log("released", handler.ghostReleasedOrders());
+        console.log("refunded", handler.ghostRefundedOrders());
+        console.log("disputes", handler.ghostDisputes());
+        console.log("contests", handler.ghostContests());
+        console.log("instant sales", handler.ghostInstantSales());
+        console.log("delivered", handler.ghostDelivered());
+        console.log("withdrawals", handler.ghostWithdrawals());
+        console.log("credits created", handler.ghostCredits());
+        console.log("self-referrer buys", handler.ghostSelfRefBuys());
+        console.log("barred resolves", handler.ghostBarredResolves());
+        console.log("claims of contested orders", handler.ghostLateClaims());
+        console.log("owed refunds created", handler.ghostOwedCreated());
+        console.log("owed refunds claimed", handler.ghostOwedClaimed());
+        console.log("owed claims blocked", handler.ghostOwedClaimBlocked());
+        console.log("blocked-buyer scenarios", handler.ghostBlockedBuyerScenarios());
     }
 }

@@ -2,7 +2,7 @@
  * Plug network configuration. One module, overridable by Vite env vars.
  *
  *   VITE_PLUG_CHAIN             "arc-testnet" (default) or "arc-mainnet"
- *   VITE_PLUG_ADDRESS           PlugCampaigns contract address
+ *   VITE_PLUG_ADDRESS           PlugCampaigns v2 contract address
  *   VITE_PLUG_DEPLOY_BLOCK      block the contract was deployed at (event scans start here)
  *   VITE_DEMO_AGENT_ADDRESS     payout address of the demo shopping agent
  *   VITE_PLUG_RPC_URL           optional RPC override (defaults to the public Arc RPC)
@@ -27,8 +27,8 @@ interface NetworkDefaults {
 /** Defaults baked in for each network. Mainnet has none until you deploy there. */
 const DEFAULTS: Record<PlugNetwork, NetworkDefaults> = {
   'arc-testnet': {
-    address: '0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa',
-    deployBlock: 68837554n,
+    address: '0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9',
+    deployBlock: 69644775n,
     demoAgent: '0xDcF8ac99C8E427049764507eBe3aB1631e7E11cC',
   },
   'arc-mainnet': {},

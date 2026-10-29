@@ -49,12 +49,13 @@ contract HookUSDC is ERC20 {
 /// @dev Attacker that tries to reenter PlugCampaigns when it receives tokens.
 ///      Can act as referrer or advertiser (the advertiser is also the merchant and receives sale proceeds).
 contract Reentrant is IHookReceiver {
-    enum Action { None, Buy, End, TopUp, Create }
+    enum Action { None, Buy, End, TopUp, Create, Confirm, Release, Dispute, Refund, Contest, ClaimRefund, Resolve, Withdraw, ClaimOwed }
 
     address public target;
     IERC20 public token;
     Action public action;
     uint256 public campaignId;
+    uint256 public orderId;
     uint256 public hits;
     bool public lastSuccess;
     bytes public lastRet;
@@ -68,6 +69,10 @@ contract Reentrant is IHookReceiver {
     function arm(Action a, uint256 id) external {
         action = a;
         campaignId = id;
+    }
+
+    function setOrder(uint256 oid) external {
+        orderId = oid;
     }
 
     function call_(bytes calldata data) external returns (bool ok, bytes memory ret) {
@@ -86,10 +91,28 @@ contract Reentrant is IHookReceiver {
             data = abi.encodeWithSignature("endCampaign(uint256)", campaignId);
         } else if (a == Action.TopUp) {
             data = abi.encodeWithSignature("topUp(uint256,uint256)", campaignId, uint256(1));
+        } else if (a == Action.Confirm) {
+            data = abi.encodeWithSignature("confirm(uint256)", orderId);
+        } else if (a == Action.Release) {
+            data = abi.encodeWithSignature("release(uint256)", orderId);
+        } else if (a == Action.Dispute) {
+            data = abi.encodeWithSignature("dispute(uint256,string)", orderId, "x");
+        } else if (a == Action.Refund) {
+            data = abi.encodeWithSignature("refund(uint256)", orderId);
+        } else if (a == Action.Contest) {
+            data = abi.encodeWithSignature("contest(uint256)", orderId);
+        } else if (a == Action.ClaimRefund) {
+            data = abi.encodeWithSignature("claimRefund(uint256)", orderId);
+        } else if (a == Action.Resolve) {
+            data = abi.encodeWithSignature("resolve(uint256,bool)", orderId, true);
+        } else if (a == Action.Withdraw) {
+            data = abi.encodeWithSignature("withdrawClosedBudget(uint256)", campaignId);
+        } else if (a == Action.ClaimOwed) {
+            data = abi.encodeWithSignature("claimOwedRefund(uint256)", orderId);
         } else {
             data = abi.encodeWithSignature(
-                "createCampaign(string,string,uint256,uint16,uint256,uint64)",
-                "t", "u", uint256(1), uint16(0), uint256(0), uint64(block.timestamp + 100)
+                "createCampaign(string,string,uint256,uint16,uint256,uint64,uint64,address)",
+                "t", "u", uint256(1), uint16(0), uint256(0), uint64(block.timestamp + 100), uint64(0), address(0)
             );
         }
         (lastSuccess, lastRet) = target.call(data);

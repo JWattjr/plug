@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom'
 import { erc20Abi } from 'viem'
 import { motion } from 'framer-motion'
 import { EmptyState, InfoNote, Skeleton, Spinner, TxNotice } from '@/components/ui'
+import { OrderCard } from '@/components/OrderCard'
+import { ProtectionBadge } from '@/components/ProtectionBadge'
+import { useOrders, usePlugLogs } from '@/hooks/useOrders'
 import { useCampaigns, useNow } from '@/hooks/useCampaigns'
 import { useTx } from '@/hooks/useTx'
 import { useUsdcAllowance, useUsdcBalance } from '@/hooks/useUsdc'
 import { useWalletGate } from '@/hooks/useWalletGate'
-import { isLive, type Campaign } from '@/lib/campaigns'
+import { isLive, isProtected, type Campaign } from '@/lib/campaigns'
 import { fmtBps, fmtNumber, fmtUsdc, parseUsdcInput, sameAddress } from '@/lib/money'
 import { plugAbi } from '@/lib/plugAbi'
 import { fmtTimeLeft } from '@/lib/time'
@@ -84,10 +87,25 @@ function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }
   )
 }
 
+/** Orders on one of my protected campaigns, with the seller's actions. */
+function SellerOrders({ campaign }: { campaign: Campaign }) {
+  const { orders } = useOrders()
+  const { logs } = usePlugLogs()
+  const mine = orders.filter((o) => o.campaignId === campaign.id)
+  if (mine.length === 0) return <p className="text-xs" style={{ color: 'var(--subtle)' }}>No protected orders on this campaign yet.</p>
+  return (
+    <div className="space-y-3" data-testid={`seller-orders-${campaign.id.toString()}`}>
+      {mine.map((o) => <OrderCard key={o.id.toString()} order={o} campaign={campaign} logs={logs} role="seller" compact />)}
+    </div>
+  )
+}
+
 function CampaignRow({ campaign, now, owner }: { campaign: Campaign; now: number; owner: `0x${string}` }) {
   const [showTopUp, setShowTopUp] = useState(false)
   const [confirmEnd, setConfirmEnd] = useState(false)
+  const [showOrders, setShowOrders] = useState(false)
   const endTx = useTx()
+  const withdrawTx = useTx()
   const live = isLive(campaign, now)
   const expiredOpen = campaign.active && !live
 
@@ -97,6 +115,13 @@ function CampaignRow({ campaign, now, owner }: { campaign: Campaign; now: number
       endTx.writeContractAsync({ address: PLUG.address!, abi: plugAbi, functionName: 'endCampaign', args: [campaign.id], chainId: PLUG.chainId }),
     )
     if (receipt) setConfirmEnd(false)
+  }
+
+  async function withdraw() {
+    if (!PLUG.address) return
+    await withdrawTx.run(() =>
+      withdrawTx.writeContractAsync({ address: PLUG.address!, abi: plugAbi, functionName: 'withdrawClosedBudget', args: [campaign.id], chainId: PLUG.chainId }),
+    )
   }
 
   const status = live ? 'Live' : expiredOpen ? 'Expired, budget not yet returned' : 'Closed'
@@ -114,6 +139,15 @@ function CampaignRow({ campaign, now, owner }: { campaign: Campaign; now: number
           </p>
         </div>
         <span className="chip" style={{ color: statusColor }}>{status}</span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <ProtectionBadge campaign={campaign} />
+        {isProtected(campaign) && (
+          <span className="text-xs tabular-nums" style={{ color: 'var(--subtle)' }}>
+            {campaign.pendingOrders.toString()} pending · {campaign.refundedCount.toString()} refunded
+          </span>
+        )}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -140,6 +174,22 @@ function CampaignRow({ campaign, now, owner }: { campaign: Campaign; now: number
               <button className="btn btn-ghost" disabled={endTx.busy} onClick={() => setConfirmEnd(false)}>Cancel</button>
             </>
           )}
+        </div>
+      )}
+      {!campaign.active && campaign.budgetRemaining > 0n && (
+        <div className="mt-4">
+          <button className="btn btn-ghost" disabled={withdrawTx.busy} onClick={() => void withdraw()}>
+            {withdrawTx.busy && <Spinner />} Withdraw {fmtNumber(campaign.budgetRemaining)} USDC leftover budget
+          </button>
+          <div className="mt-2"><TxNotice state={withdrawTx.state} /></div>
+        </div>
+      )}
+      {isProtected(campaign) && (
+        <div className="mt-4">
+          <button className="btn btn-ghost" onClick={() => setShowOrders((v) => !v)} aria-expanded={showOrders} data-testid={`toggle-orders-${campaign.id.toString()}`}>
+            {showOrders ? 'Hide orders' : 'Orders'}
+          </button>
+          {showOrders && <div className="mt-3"><SellerOrders campaign={campaign} /></div>}
         </div>
       )}
       {showTopUp && live && <TopUp campaign={campaign} owner={owner} />}

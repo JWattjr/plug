@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, Bot, Lock, Split } from 'lucide-react'
+import { ArrowRight, Bot, Lock, ShieldCheck, Split } from 'lucide-react'
 import { Page, Skeleton } from '@/components/ui'
+import { ActivityFeed } from '@/components/ActivityFeed'
 import { SplitVisual } from '@/components/SplitVisual'
 import { useStats } from '@/hooks/useCampaigns'
 import { fmtNumber, parseUsdcInput } from '@/lib/money'
@@ -81,6 +82,23 @@ export default function Home() {
         {stats.error && (
           <p className="mt-3 text-sm" style={{ color: 'var(--danger)' }}>Could not read the chain right now. Stats will retry.</p>
         )}
+      </section>
+
+      <section className="mt-16">
+        <div className="mb-4 flex items-end justify-between">
+          <h2 className="display text-2xl font-semibold">Live activity</h2>
+          <Link to="/activity" className="text-sm underline underline-offset-2" style={{ color: 'var(--accent)' }}>See all</Link>
+        </div>
+        <ActivityFeed limit={6} />
+      </section>
+
+      <section className="mt-16">
+        <div className="card p-6 sm:p-8">
+          <h2 className="display flex items-center gap-2 text-2xl font-semibold"><ShieldCheck className="size-6" style={{ color: 'var(--success)' }} /> Buyer protection</h2>
+          <p className="mt-2 max-w-3xl text-pretty" style={{ color: 'var(--muted)' }}>
+            Sellers can hold each payment in escrow for a window. An agent buying for its user can dispute a bad purchase and get the money back, and agents only earn commission on sales that stick. A refunded sale pays no commission.
+          </p>
+        </div>
       </section>
 
       <section className="mt-16">

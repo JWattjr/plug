@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowUpRight, Clock, Percent, Wallet } from 'lucide-react'
 import { SponsoredBadge } from '@/components/ui'
-import { canPayCommission, commissionPerSale, type Campaign } from '@/lib/campaigns'
+import { ProtectionBadge } from '@/components/ProtectionBadge'
+import { canPayCommission, commissionPerSale, isProtected, type Campaign } from '@/lib/campaigns'
 import { fmtBps, fmtNumber, shortAddress } from '@/lib/money'
 import { fmtTimeLeft } from '@/lib/time'
 
@@ -32,6 +33,15 @@ export function OfferCard({ campaign, now, index = 0 }: Props) {
         <p className="mt-1 truncate text-xs" style={{ color: 'var(--subtle)' }}>
           by {shortAddress(campaign.advertiser)}
         </p>
+      </div>
+
+      <div className="flex flex-col items-start gap-1">
+        <ProtectionBadge campaign={campaign} />
+        {isProtected(campaign) && (
+          <span className="text-xs tabular-nums" style={{ color: 'var(--subtle)' }} data-testid="order-counts">
+            {campaign.pendingOrders.toString()} pending order{campaign.pendingOrders === 1n ? '' : 's'} · {campaign.refundedCount.toString()} refund{campaign.refundedCount === 1n ? '' : 's'}
+          </span>
+        )}
       </div>
 
       <div className="flex items-baseline gap-1.5">

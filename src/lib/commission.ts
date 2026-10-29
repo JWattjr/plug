@@ -1,4 +1,5 @@
-import { canPayCommission, type Campaign } from '@/lib/campaigns'
+import { canPayCommission, isProtected, type Campaign } from '@/lib/campaigns'
+import { PLUG } from '@/plug.config'
 import { commissionFor, sameAddress } from '@/lib/money'
 
 export interface CommissionOutlook {
@@ -18,6 +19,8 @@ export function explainCommission(campaign: Campaign, referrer: string | undefin
   if (!referrer || sameAddress(referrer, ZERO)) return { commission: 0n, reason: 'No agent referred this sale.' }
   if (sameAddress(referrer, buyer)) return { commission: 0n, reason: 'Self-referral: a buyer cannot earn commission on their own purchase.' }
   if (sameAddress(referrer, campaign.advertiser)) return { commission: 0n, reason: 'Self-referral: the seller cannot earn commission on its own sale.' }
+  if (sameAddress(referrer, PLUG.address)) return { commission: 0n, reason: 'The contract itself cannot be a referrer.' }
+  if (isProtected(campaign) && sameAddress(referrer, campaign.arbiter)) return { commission: 0n, reason: 'The arbiter cannot earn commission on orders it may have to decide.' }
   if (campaign.commissionBps === 0) return { commission: 0n, reason: 'This campaign pays no commission.' }
   const commission = commissionFor(campaign.price, campaign.commissionBps)
   if (commission === 0n) return { commission: 0n, reason: 'The commission rounds down to zero at this price.' }

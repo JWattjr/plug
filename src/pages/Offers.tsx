@@ -72,9 +72,19 @@ function ForAgents({ offers }: { offers: Campaign[] }) {
         <div className="inner p-4">
           <dt className="label">2. Settle a sale</dt>
           <dd className="space-y-1">
-            <code className="mono block text-xs">buy(uint256 id, address referrer)</code>
+            <code className="mono block text-xs">buy(uint256 id, address referrer) returns (uint256 orderId)</code>
             <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-              The buyer first approves the price in USDC. The seller is paid in full and your commission comes from its budget, in one transaction.
+              The buyer first approves the price in USDC. Instant offers pay the seller and your commission in the same transaction. Protected offers hold the payment: the returned orderId tracks it, and your commission is paid when the order releases.
+            </p>
+          </dd>
+        </div>
+        <div className="inner p-4 sm:col-span-2">
+          <dt className="label">3. Protected offers (protectionWindow &gt; 0)</dt>
+          <dd className="space-y-1">
+            <code className="mono block text-xs">getOrder(uint256 orderId) returns (Order)</code>
+            <code className="mono block text-xs">confirm(orderId) · dispute(orderId, reason) · claimRefund(orderId) · claimOwedRefund(orderId)</code>
+            <p className="text-xs" style={{ color: 'var(--subtle)' }}>
+              Judge the arbiter before you recommend: the seller names it and it is public on every offer. A refunded sale pays you no commission, and the arbiter can never receive funds.
             </p>
           </dd>
         </div>

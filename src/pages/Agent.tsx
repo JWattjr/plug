@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowUp, Bot, ShoppingBag, User } from 'lucide-react'
 import { ErrorNote, Page, PageTitle, SponsoredBadge } from '@/components/ui'
+import { ProtectionBadge } from '@/components/ProtectionBadge'
 import { useLiveOffers } from '@/hooks/useCampaigns'
 import { commissionPerSale, type Campaign } from '@/lib/campaigns'
 import { rankOffers, SPONSOR_DISCLOSURE } from '@/lib/matcher'
@@ -38,6 +39,7 @@ function AgentBubble({ message }: { message: Message }) {
             <SponsoredBadge />
             <span className="mono text-xs" style={{ color: 'var(--subtle)' }}>#{offer.id.toString()}</span>
           </div>
+          <ProtectionBadge campaign={offer} />
           <div>
             <div className="display text-lg font-semibold">{offer.title}</div>
             <div className="text-sm tabular-nums" style={{ color: 'var(--muted)' }}>

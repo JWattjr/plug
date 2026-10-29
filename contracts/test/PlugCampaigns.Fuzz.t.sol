@@ -71,7 +71,7 @@ contract PlugCampaignsFuzzTest is PlugCampaignsBase {
         bps = uint16(bound(bps, 5001, type(uint16).max));
         vm.prank(advertiser);
         vm.expectRevert(abi.encodeWithSelector(PlugCampaigns.InvalidCommissionBps.selector, bps));
-        plug.createCampaign("t", "u", PRICE, bps, BUDGET, _end());
+        plug.createCampaign("t", "u", PRICE, bps, BUDGET, _end(), 0, address(0));
     }
 
     /// Buyer == referrer never earns a commission, whatever the parameters.

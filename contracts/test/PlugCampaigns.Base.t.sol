@@ -40,7 +40,7 @@ abstract contract PlugCampaignsBase is Test {
 
     function _create(uint256 price, uint16 bps, uint256 budget) internal returns (uint256 id) {
         vm.prank(advertiser);
-        id = plug.createCampaign("Title", "https://x.y", price, bps, budget, _end());
+        id = plug.createCampaign("Title", "https://x.y", price, bps, budget, _end(), 0, address(0));
     }
 
     function _create() internal returns (uint256) {

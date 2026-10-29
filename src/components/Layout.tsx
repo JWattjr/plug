@@ -7,11 +7,15 @@ import { useWalletGate } from '@/hooks/useWalletGate'
 import { PLUG, PLUG_CONFIGURED } from '@/plug.config'
 import { buildAddressExplorerUrl } from '@/onchain-facts'
 import { shortAddress } from '@/lib/money'
+import { useChainClock } from '@/hooks/useChainClock'
 
 const LINKS = [
   { to: '/advertise', label: 'Advertise' },
   { to: '/offers', label: 'Offers' },
   { to: '/agent', label: 'Demo agent' },
+  { to: '/orders', label: 'Orders' },
+  { to: '/arbiter', label: 'Arbiter' },
+  { to: '/activity', label: 'Activity' },
 ]
 
 function NetworkBanner() {
@@ -49,6 +53,7 @@ export function Layout() {
   const [menu, setMenu] = useState(false)
   const location = useLocation()
   const gate = useWalletGate()
+  useChainClock()
   const earningsTarget = gate.address ?? PLUG.demoAgent
   const links = earningsTarget ? [...LINKS, { to: `/earnings/${earningsTarget}`, label: 'Earnings' }] : LINKS
 
@@ -63,7 +68,7 @@ export function Layout() {
             <span className="display text-xl font-bold">Plug</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="Main">
             {links.map((l) => (
               <NavLink
                 key={l.to}
@@ -81,7 +86,7 @@ export function Layout() {
               {PLUG.chainName}
             </span>
             <WalletButton />
-            <button className="btn btn-ghost !px-3 md:hidden" onClick={() => setMenu((v) => !v)} aria-label="Menu" aria-expanded={menu}>
+            <button className="btn btn-ghost !px-3 lg:hidden" onClick={() => setMenu((v) => !v)} aria-label="Menu" aria-expanded={menu}>
               {menu ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
           </div>
@@ -92,7 +97,7 @@ export function Layout() {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden md:hidden"
+              className="overflow-hidden lg:hidden"
               aria-label="Mobile"
             >
               <div className="flex flex-col gap-1 px-4 pb-3">

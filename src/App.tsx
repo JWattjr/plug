@@ -9,6 +9,10 @@ const Offers = lazy(() => import('@/pages/Offers'))
 const Agent = lazy(() => import('@/pages/Agent'))
 const Checkout = lazy(() => import('@/pages/Checkout'))
 const Earnings = lazy(() => import('@/pages/Earnings'))
+const Arbiter = lazy(() => import('@/pages/Arbiter'))
+const Activity = lazy(() => import('@/pages/Activity'))
+const OrdersPage = lazy(() => import('@/pages/Orders').then((m) => ({ default: m.OrdersPage })))
+const OrderPage = lazy(() => import('@/pages/Orders').then((m) => ({ default: m.OrderPage })))
 
 function NotFound() {
   return (
@@ -32,6 +36,10 @@ export default function App() {
             <Route path="agent" element={<Agent />} />
             <Route path="checkout/:id" element={<Checkout />} />
             <Route path="earnings/:address" element={<Earnings />} />
+            <Route path="orders" element={<OrdersPage />} />
+            <Route path="orders/:id" element={<OrderPage />} />
+            <Route path="arbiter" element={<Arbiter />} />
+            <Route path="activity" element={<Activity />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

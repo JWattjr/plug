@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { erc20Abi, parseEventLogs } from 'viem'
-import { ArrowRight, Check } from 'lucide-react'
+import { erc20Abi, isAddress, parseEventLogs } from 'viem'
+import { ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { ErrorNote, InfoNote, Page, PageTitle, Spinner, Step, TxNotice, type StepStatus } from '@/components/ui'
 import { MyCampaigns } from '@/components/MyCampaigns'
 import { useTx } from '@/hooks/useTx'
 import { useUsdcAllowance, useUsdcBalance } from '@/hooks/useUsdc'
 import { useWalletGate } from '@/hooks/useWalletGate'
-import { commissionFor, fmtNumber, fmtUsdc, parseUsdcInput } from '@/lib/money'
+import { commissionFor, fmtNumber, fmtUsdc, parseUsdcInput, sameAddress } from '@/lib/money'
 import { plugAbi } from '@/lib/plugAbi'
+import { WINDOW_CHOICES_DAYS } from '@/lib/orders'
 import { nowSeconds } from '@/lib/time'
 import { PLUG, PLUG_CONFIGURED } from '@/plug.config'
 
@@ -23,9 +24,14 @@ interface FormState {
   commissionPct: string
   budget: string
   days: string
+  protect: boolean
+  windowDays: number
+  arbiter: string
 }
 
-const INITIAL: FormState = { title: '', offerUrl: '', price: '', commissionPct: '10', budget: '', days: '7' }
+const INITIAL: FormState = { title: '', offerUrl: '', price: '', commissionPct: '10', budget: '', days: '7', protect: false, windowDays: 7, arbiter: '' }
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
   return (
@@ -54,7 +60,7 @@ export default function Advertise() {
   const [approvedAmount, setApprovedAmount] = useState(0n)
   const [createdId, setCreatedId] = useState<bigint | null>(null)
 
-  const set = (key: keyof FormState) => (value: string) => setForm((f) => ({ ...f, [key]: value }))
+  const set = (key: 'title' | 'offerUrl' | 'price' | 'commissionPct' | 'budget' | 'days' | 'arbiter') => (value: string) => setForm((f) => ({ ...f, [key]: value }))
 
   const parsed = useMemo(() => {
     const price = parseUsdcInput(form.price)
@@ -65,7 +71,7 @@ export default function Advertise() {
     return { price, budget, bps, days, pct }
   }, [form])
 
-  const errors: Partial<Record<keyof FormState, string>> = {}
+  const errors: Partial<Record<'title' | 'offerUrl' | 'price' | 'commissionPct' | 'budget' | 'days' | 'arbiter', string>> = {}
   if (!form.title.trim()) errors.title = 'Give the offer a title.'
   else if (byteLength(form.title) > MAX_TITLE_BYTES) errors.title = `Keep the title under ${MAX_TITLE_BYTES} bytes.`
   if (!/^https?:\/\/\S+\.\S+/.test(form.offerUrl.trim())) errors.offerUrl = 'Enter a full link starting with https://'
@@ -74,6 +80,12 @@ export default function Advertise() {
   if (!Number.isFinite(parsed.pct) || parsed.pct < 0 || parsed.pct > 50 || !Number.isFinite(parsed.bps)) errors.commissionPct = 'Commission must be between 0% and 50%.'
   if (parsed.budget === undefined) errors.budget = 'Enter a budget (0 is allowed).'
   if (!Number.isInteger(parsed.days) || parsed.days < 1 || parsed.days > 365) errors.days = 'Choose 1 to 365 days.'
+  if (form.protect) {
+    const arbiter = form.arbiter.trim()
+    if (!isAddress(arbiter)) errors.arbiter = 'Enter the arbiter\'s wallet address (0x…).'
+    else if (arbiter.toLowerCase() === ZERO_ADDRESS) errors.arbiter = 'The arbiter cannot be the zero address.'
+    else if (sameAddress(arbiter, gate.address)) errors.arbiter = 'The arbiter cannot be you. Pick someone buyers can trust to be fair.'
+  }
 
   const budget = parsed.budget ?? 0n
   const haveBalance = balance.data
@@ -103,7 +115,16 @@ export default function Advertise() {
         address: PLUG.address!,
         abi: plugAbi,
         functionName: 'createCampaign',
-        args: [form.title.trim(), form.offerUrl.trim(), parsed.price!, parsed.bps, budget, endTime],
+        args: [
+          form.title.trim(),
+          form.offerUrl.trim(),
+          parsed.price!,
+          parsed.bps,
+          budget,
+          endTime,
+          form.protect ? BigInt(form.windowDays * 86_400) : 0n,
+          form.protect ? (form.arbiter.trim() as `0x${string}`) : ZERO_ADDRESS,
+        ],
         chainId: PLUG.chainId,
       }),
     )
@@ -173,6 +194,55 @@ export default function Advertise() {
             </Field>
           </div>
 
+          <div className="inner space-y-4 p-4" data-testid="protection-section">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 size-5 accent-[color:var(--accent)]"
+                checked={form.protect}
+                onChange={(e) => setForm((f) => ({ ...f, protect: e.target.checked }))}
+                data-testid="protect-toggle"
+              />
+              <span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold"><ShieldCheck className="size-4" style={{ color: 'var(--success)' }} /> Buyer protection</span>
+                <span className="mt-0.5 block text-xs" style={{ color: 'var(--subtle)' }}>
+                  Hold each buyer&apos;s payment in escrow for a window. Agents can buy with confidence, and commission is paid only on sales that stick.
+                </span>
+              </span>
+            </label>
+            {form.protect && (
+              <div className="space-y-4">
+                <div>
+                  <span className="label">Protection window</span>
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Protection window">
+                    {WINDOW_CHOICES_DAYS.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.windowDays === d}
+                        className={`btn ${form.windowDays === d ? 'btn-primary' : 'btn-ghost'} !min-h-10`}
+                        onClick={() => setForm((f) => ({ ...f, windowDays: d }))}
+                        data-testid={`window-${d}`}
+                      >
+                        {d} days
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Field label="Arbiter address" error={touched ? errors.arbiter : undefined} hint="Public on the offer. Agents judge it before they recommend you.">
+                  <input className="field mono !text-sm" placeholder="0x…" value={form.arbiter} onChange={(e) => set('arbiter')(e.target.value)} data-testid="arbiter-input" />
+                </Field>
+                <ul className="space-y-1.5 text-xs" style={{ color: 'var(--muted)' }}>
+                  <li>Buyers can dispute during the window. If you ignore a dispute for 3 days, the buyer gets a refund.</li>
+                  <li>If you contest it, the arbiter decides: refund the buyer or pay you. If the arbiter stays silent for 14 days, the buyer can claim a refund.</li>
+                  <li>The arbiter never receives funds and cannot be you. Choose someone independent.</li>
+                  <li>A refunded sale pays the agent nothing.</li>
+                </ul>
+              </div>
+            )}
+          </div>
+
           {parsed.price !== undefined && parsed.price > 0n && Number.isFinite(parsed.bps) && (
             <InfoNote>
               Each sale pays you {fmtUsdc(parsed.price)} and pays the referring agent {fmtUsdc(perSaleCommission)} from your budget.
@@ -212,6 +282,7 @@ export default function Advertise() {
               <li>If you buy from yourself, you only move your own USDC.</li>
               <li>Anyone else pays you the full price to earn back at most half.</li>
               <li>End the campaign any time to get unspent budget back.</li>
+              <li>Turn on buyer protection so agents can buy for their users with confidence. Protected sales pay you after the window.</li>
             </ul>
           </div>
           <p className="px-1 text-xs tabular-nums" style={{ color: 'var(--subtle)' }}>
