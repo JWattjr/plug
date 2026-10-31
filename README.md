@@ -1,6 +1,6 @@
 # Plug
 
-Ads for AI agents. Pay only when they sell. Sellers lock a USDC budget in a campaign and AI agents recommend the offer. Plug v2 adds buyer protection: protected purchases hold the buyer's price in escrow until the order settles, when the seller receives the full price and the agent receives its commission from the seller's advertising budget. Instant-settlement campaigns pay the seller and agent in the purchase transaction. Every offer is sponsored, and agents must say so.
+Ads for AI agents. Pay only when they sell. Sellers lock a USDC budget in a campaign and AI agents recommend the offer. Plug includes buyer protection: protected purchases hold the buyer's price in escrow until the order settles, when the seller receives the full price and the agent receives its commission from the seller's advertising budget. Instant-settlement campaigns pay the seller and agent in the purchase transaction. Every offer is sponsored, and agents must say so.
 
 Built with [Arc Studio](https://studio.arc.io)
 
@@ -50,15 +50,15 @@ Deep links such as `/checkout/3` need the host to serve `index.html` for unknown
 
 The contract lives in `contracts/PlugCampaigns.sol` with its tests in `contracts/test/`.
 
-- **Current: Plug v2, Arc mainnet (chain 5042):** `0xaa5364de35d65633ad031ff4da4f941e0de6f913` ([contract explorer](https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913)).
-- v2 deploy transaction: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1 (block `28454210`).
-- **Plug v2, Arc Testnet (chain 5042002):** `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` ([contract explorer](https://explorer.testnet.arc.io/address/0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9)).
+- **Current: Plug, Arc mainnet (chain 5042):** `0xaa5364de35d65633ad031ff4da4f941e0de6f913` ([contract explorer](https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913)).
+- Deploy transaction: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1 (block `28454210`).
+- **Plug, Arc Testnet (chain 5042002):** `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` ([contract explorer](https://explorer.testnet.arc.io/address/0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9)).
 - Earlier version, Plug v1 on Arc mainnet: `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a` ([contract explorer](https://explorer.arc.io/address/0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a)).
 - Earlier version, Plug v1 on Arc Testnet: `0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa` ([contract explorer](https://explorer.testnet.arc.io/address/0xf15c2b5ba701061c926f9c90e191705a1e8fe0aa)).
 
-The v2 mainnet runtime bytecode was verified identical to the tested Arc Studio build.
+The mainnet runtime bytecode was verified identical to the tested Arc Studio build.
 
-## Buyer protection in v2
+## Buyer protection
 
 For a protected campaign, the seller picks a **3 to 30 day protection window** in the app and a **public arbiter**. The buyer's USDC price is held in the contract until the buyer confirms or the protection window ends and the order can be released. The seller receives the full price and the agent's commission comes from the seller's budget only when the order settles successfully; instant-settlement campaigns remain available without a protection window.
 
@@ -82,7 +82,7 @@ Every offer is labelled **Sponsored**. Agents must disclose that an offer is spo
 
 [Arc Studio project](https://studio.arc.io/app/49ce882a-a246-44f3-a76d-ce91a33aa51a)
 
-Plug v2 contracts and the app were built in Arc Studio. Validation of that build includes **302 Foundry tests, including 10 invariants**, a **max-preset audit**, a **clean Slither result**, and a **53-check end-to-end flow**. These results describe the tested Arc Studio build; they were not rerun as part of this hosting update.
+Plug contracts and the app were built in Arc Studio. Validation of that build includes **302 Foundry tests, including 10 invariants**, a **max-preset audit**, a **clean Slither result**, and a **53-check end-to-end flow**. These results describe the tested Arc Studio build; they were not rerun as part of this hosting update.
 
 Application and contract changes are made through Arc Studio. Later Arc Studio exports can be committed and pushed as received.
 
@@ -90,10 +90,10 @@ Application and contract changes are made through Arc Studio. Later Arc Studio e
 
 - Live app: https://plug-tawny.vercel.app
 - Public repository: https://github.com/JWattjr/plug
-- Current v2 Arc mainnet contract: `0xaa5364de35d65633ad031ff4da4f941e0de6f913`
-- v2 Arc mainnet contract explorer: https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913
-- v2 mainnet deploy transaction: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1
-- v2 Arc Testnet contract: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9`
+- Current Arc mainnet contract: `0xaa5364de35d65633ad031ff4da4f941e0de6f913`
+- Arc mainnet contract explorer: https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913
+- Mainnet deploy transaction: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1
+- Arc Testnet contract: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9`
 - Earlier v1 Arc mainnet contract: `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a`
 
 The live app uses Arc mainnet. Vercel Production and Preview use the following public build configuration:

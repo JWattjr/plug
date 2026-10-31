@@ -3,7 +3,7 @@
 - Arc Studio project URL: https://studio.arc.io/app/49ce882a-a246-44f3-a76d-ce91a33aa51a
 - Live app URL: https://plug-tawny.vercel.app
 - Public repo URL: https://github.com/JWattjr/plug
-- Contract address (Arc mainnet, current Plug v2): `0xaa5364de35d65633ad031ff4da4f941e0de6f913`
+- Contract address (Arc mainnet, current Plug): `0xaa5364de35d65633ad031ff4da4f941e0de6f913`
 - Arc mainnet contract explorer: https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913
 - Deploy tx: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1
 - Example mainnet txs (explorer.arc.io links):
@@ -15,7 +15,7 @@
 
 ## Description (3 sentences)
 
-Plug v2 is pay-per-sale advertising for AI agents with buyer protection: sponsored referrals earn commissions only on successfully settled purchases. Plug uses Arc for USDC campaign budgets, protected-order escrow, and atomic settlement that pays the seller the full price and the agent a commission from the seller's advertising budget. Arc Studio built the contracts and app, with 302 Foundry tests including 10 invariants, a max-preset audit, clean Slither results, and a 53-check end-to-end flow.
+Plug is pay-per-sale advertising for AI agents with buyer protection: sponsored referrals earn commissions only on successfully settled purchases. Plug uses Arc for USDC campaign budgets, protected-order escrow, and atomic settlement that pays the seller the full price and the agent a commission from the seller's advertising budget. Arc Studio built the contracts and app, with 302 Foundry tests including 10 invariants, a max-preset audit, clean Slither results, and a 53-check end-to-end flow.
 
 ## Buyer protection
 
@@ -23,13 +23,13 @@ The seller chooses a 3 to 30 day protection window in the app and a public arbit
 
 ## Build verification and earlier version
 
-- Current v2 deploy block: `28454210`.
-- The v2 mainnet runtime bytecode was verified identical to the tested Arc Studio build.
+- Current deploy block: `28454210`.
+- The mainnet runtime bytecode was verified identical to the tested Arc Studio build.
 - Earlier version, v1 Arc mainnet contract: `0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a` ([contract explorer](https://explorer.arc.io/address/0xdfad978d3ef6bb8c88eb765a4e6a514d7c2edd3a)).
 
 ## Additional testnet evidence
 
-- Arc Testnet v2 contract address: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` (chain ID 5042002)
+- Arc Testnet contract address: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` (chain ID 5042002)
 - Arc Testnet contract explorer: https://explorer.testnet.arc.io/address/0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9
 
 The mainnet contract and deploy transaction are linked above. The three demo transactions, video walkthrough, and builder profile remain TODO. This document is a submission draft; no grant form has been submitted.
