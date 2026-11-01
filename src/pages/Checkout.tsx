@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { isAddress, parseEventLogs } from 'viem'
 import { usePublicClient } from 'wagmi'
 import { ArrowUpRight, Bot, Megaphone, ShieldCheck, Store } from 'lucide-react'
-import { ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
+import { AllowanceSummary, ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { ErrorNote, Page, Skeleton, Spinner, SponsoredBadge, Step, TxLink, TxNotice, type StepStatus } from '@/components/ui'
 import { SplitVisual } from '@/components/SplitVisual'
 import { ProtectionBadge } from '@/components/ProtectionBadge'
@@ -272,7 +272,7 @@ export default function Checkout() {
                 <Step index={2} title="Buy" status={buyStatus} detail="Pays the seller and the agent in one transaction" />
               </ol>
               {action}
-              {gate.isConnected && !gate.wrongNetwork && <ApprovalNotice approval={approval} onStartOver={approveTx.reset} />}
+              {gate.isConnected && !gate.wrongNetwork && <><AllowanceSummary approval={approval} /><ApprovalNotice approval={approval} onStartOver={approveTx.reset} needed={price} /></>}
               <TxNotice state={approveTx.state} />
               <TxNotice state={buyTx.state} />
             </div>

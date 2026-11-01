@@ -44,17 +44,45 @@ export function useOrdersOf(filter: (order: Order) => boolean) {
 
 export const isBuyer = (address: string | undefined) => (order: Order) => sameAddress(order.buyer, address)
 
-/** Scan a block range for every event of the contract, halving the range if the RPC refuses a wide query. */
-async function scanRaw(client: PublicClient, from: bigint, to: bigint): Promise<Log[]> {
-  try {
-    return await client.getLogs({ address: PLUG.address!, fromBlock: from, toBlock: to })
-  } catch (error) {
-    if (to - from < 2_000n) throw error
-    const mid = from + (to - from) / 2n
-    const left = await scanRaw(client, from, mid)
-    const right = await scanRaw(client, mid + 1n, to)
-    return [...left, ...right]
+/**
+ * Public endpoints cap eth_getLogs ranges (the Arc endpoints answer "requested range too large"
+ * above a few thousand blocks). Start at a size they accept and only shrink if one still refuses.
+ */
+const LOG_CHUNK = 5_000n
+const MIN_LOG_CHUNK = 500n
+
+interface LogScan {
+  /** Next block to read. Everything before it is already in `logs`. */
+  next: bigint
+  logs: Log[]
+}
+
+/** Progress survives failures and refetches, so a rate-limited scan resumes instead of restarting from the deploy block. */
+const scans = new Map<string, LogScan>()
+
+/** Test hook: forget scan progress. */
+export function resetLogScans(): void {
+  scans.clear()
+}
+
+/** Scan new blocks since the last pass, one request at a time, keeping every finished chunk. */
+export async function scanLogs(client: PublicClient, address: `0x${string}`, deployBlock: bigint, head: bigint): Promise<Log[]> {
+  const key = `${PLUG.chainId}:${address.toLowerCase()}`
+  const scan = scans.get(key) ?? { next: deployBlock, logs: [] }
+  scans.set(key, scan)
+  let chunk = LOG_CHUNK
+  while (scan.next <= head) {
+    const to = scan.next + chunk - 1n > head ? head : scan.next + chunk - 1n
+    try {
+      const found = await client.getLogs({ address, fromBlock: scan.next, toBlock: to })
+      scan.logs.push(...found)
+      scan.next = to + 1n
+    } catch (error) {
+      if (chunk <= MIN_LOG_CHUNK || !/range|too large|ranges over/i.test(String((error as { details?: string }).details ?? error))) throw error
+      chunk = chunk / 2n
+    }
   }
+  return scan.logs
 }
 
 function decode(logs: Log[]) {
@@ -72,7 +100,7 @@ export function usePlugLogs() {
     refetchInterval: 12_000,
     queryFn: async (): Promise<PlugLog[]> => {
       const head = await client!.getBlockNumber()
-      const raw = await scanRaw(client as PublicClient, PLUG.deployBlock!, head)
+      const raw = await scanLogs(client as PublicClient, PLUG.address!, PLUG.deployBlock!, head)
       return decode(raw)
     },
   })

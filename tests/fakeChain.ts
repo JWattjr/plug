@@ -30,6 +30,14 @@ export class FakeChain {
   /** When true, a mined approval also raises the node's reported allowance. */
   approvalUpdatesNode = true
 
+  /** Public RPC refuses the batched (Multicall3) call, like a rate-limited endpoint. */
+  failMulticall = false
+  /** The wallet answers eth_call (its own node). Off by default so the public RPC is the only source. */
+  walletReads = false
+  /** What the wallet reports for eth_chainId after it has connected. */
+  walletChainId = 5042
+  private walletConnected = false
+
   account: `0x${string}` = OWNER
   allowanceCalls = 0
   sentTransactions: { from: string; to: string; data: string }[] = []
@@ -71,6 +79,7 @@ export class FakeChain {
       case 'eth_call': {
         const tx = p[0] as { to: string; data: Hex }
         if (tx.to.toLowerCase() === MULTICALL3) {
+          if (this.failMulticall) throw new Error('HTTP request failed. Status: 429. Details: rate limit exceeded')
           const { args } = decodeFunctionData({ abi: multicall3Abi, data: tx.data })
           const calls = args![0] as readonly { target: string; callData: Hex }[]
           const results = await Promise.all(calls.map((c) => this.call(c.target, c.callData)))
@@ -122,9 +131,18 @@ export class FakeChain {
       switch (method) {
         case 'eth_requestAccounts':
         case 'eth_accounts':
+          this.walletConnected = true
           return [this.account]
         case 'eth_chainId':
-          return '0x13b2'
+          // Connect with the right chain; afterwards the wallet may drift without telling the page.
+          return this.walletConnected ? numberToHex(BigInt(this.walletChainId)) : '0x13b2'
+        case 'eth_call': {
+          if (!this.walletReads) throw new Error('FakeWallet: unsupported eth_call')
+          const tx = p[0] as { to: string; data: Hex }
+          const result = await this.call(tx.to, tx.data)
+          if (!result.ok) throw new Error('execution reverted')
+          return result.data
+        }
         case 'wallet_switchEthereumChain':
           return null
         case 'eth_sendTransaction': {

@@ -65,6 +65,17 @@ function readBlock(fallback?: bigint): bigint | undefined {
   return fallback
 }
 
+/**
+ * Read endpoints, primary first. A VITE_PLUG_RPC_URL override is used alone. Otherwise the
+ * registry's public endpoint leads and the chain's other published endpoints back it up, so
+ * one rate-limited endpoint cannot block reads.
+ */
+function readRpcUrls(primary: string, published: readonly string[]): readonly string[] {
+  const override = env('VITE_PLUG_RPC_URL')
+  if (override) return [override]
+  return Array.from(new Set([primary, ...published]))
+}
+
 const network = readNetwork()
 const defaults = DEFAULTS[network]
 const chain = CHAINS[network]
@@ -84,6 +95,7 @@ export const PLUG = {
   /** Payout address of the demo shopping agent. */
   demoAgent: readAddress('VITE_DEMO_AGENT_ADDRESS', defaults.demoAgent),
   rpcUrl: env('VITE_PLUG_RPC_URL') ?? chainFacts.rpcUrls[0],
+  rpcUrls: readRpcUrls(chainFacts.rpcUrls[0], chain.rpcUrls.default.http),
   explorerBase: chainFacts.explorerBase,
   usdcAddress: usdc?.address as `0x${string}` | undefined,
   usdcDecimals: usdcDecimalsFor(chain.id),

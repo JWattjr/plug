@@ -86,3 +86,19 @@ Remaining uncertainty: neither Studio nor the local tests reproduced the origina
 No real transactions were sent, no wallets were created, and no mainnet funds were spent by this fix workflow. The user still needs an actual campaign-funding transaction for submission evidence.
 
 The current local npm install reported 89 audit findings (12 low, 18 moderate, 59 high). Dependency review stays inside Arc Studio; no audit-fix mutations were applied locally.
+
+## Live allowance-read failure after Studio safeguard (2026-11-01)
+
+The user shared the new production error: `Retry allowance check` and `We could not read your USDC allowance from the network` for budget 0.01 USDC. The safeguard is live, but the underlying read failure remains unresolved. Do not request another paid approval.
+
+A read-only snapshot of the actual Chrome Advertise tab showed account `0x535d...b13b`, different from the approved `0xcd64...e289` account. A successful read for that different owner should still produce zero rather than a network error. Console output also showed Phantom/MetaMask competing for `window.ethereum`; this does not establish a cause for wagmi's public HTTP reads. No actual failed RPC payload/response was captured. Native browser inspection ended because Computer Use could not verify the current URL. Follow-up diagnosis and any source changes must go through Arc Studio; actionable error details are needed if the failure cannot be reproduced there.
+
+### Studio follow-up repair and evidence
+
+The follow-up was authored in the same Arc Studio app and thread. Its 15 changed source/test files were pulled unchanged and independently compared byte for byte with the reviewed export. No dependencies, contracts, ABI, deployment addresses, or wallet permissions changed.
+
+The repair tries the configured Arc RPC endpoints, then an unbatched allowance read, then the connected connector's provider using only `eth_chainId` and `eth_call`. A wallet answer is rejected if its reported chain differs from the configured chain. Failed reads remain blocked from paid approvals and expose a copyable diagnostic panel with the owner, target chain, addresses, endpoint host names and redacted errors. The page also identifies the account being checked and its allowance.
+
+Studio reproduced HTTP 429 responses under request bursts and a history scan that repeatedly restarted on failures. The scan now retains progress and reads only new blocks after completion. This is a verified load issue, but the exact cause of the user's failing allowance request remains unproven: that failed request was not captured, and Studio could not launch Chromium. Do not attribute it conclusively to throttling or wallet extensions.
+
+Independent read-only checks against all four Arc endpoints (`rpc.mainnet.arc.io`, `rpc.blockdaemon.mainnet.arc.io`, `rpc.drpc.mainnet.arc.io`, `rpc.quicknode.mainnet.arc.io`) returned chain 5042 and allowance 10000 for `0xcd64...e289`. A separate read for `0x535d...b13b` returned zero. The local regression suite passed 58 tests with 0 failures and 127 assertions; `npm run build` also passed. No real transactions or approvals were sent. Live connected-wallet verification remains necessary after deployment; if it fails, capture the new Technical details panel rather than requesting another approval.

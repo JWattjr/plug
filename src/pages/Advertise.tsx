@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { isAddress, parseEventLogs } from 'viem'
 import { ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { ErrorNote, InfoNote, Page, PageTitle, Spinner, Step, TxNotice, type StepStatus } from '@/components/ui'
-import { ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
+import { AllowanceSummary, ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { MyCampaigns } from '@/components/MyCampaigns'
 import { useTx } from '@/hooks/useTx'
 import { useApproval } from '@/hooks/useApproval'
@@ -265,7 +265,7 @@ export default function Advertise() {
           </ol>
 
           {action}
-          {gate.isConnected && !gate.wrongNetwork && <ApprovalNotice approval={approval} onStartOver={approveTx.reset} />}
+          {gate.isConnected && !gate.wrongNetwork && <><AllowanceSummary approval={approval} /><ApprovalNotice approval={approval} onStartOver={approveTx.reset} needed={budget} /></>}
           <TxNotice state={approveTx.state} />
           <TxNotice state={createTx.state} />
 

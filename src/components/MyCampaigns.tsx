@@ -81,7 +81,7 @@ function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }
         )}
       </div>
       {insufficient && <p className="text-xs" style={{ color: 'var(--danger)' }}>Insufficient USDC for that amount.</p>}
-      <ApprovalNotice approval={approval} onStartOver={approveTx.reset} />
+      <ApprovalNotice approval={approval} onStartOver={approveTx.reset} needed={valid ? raw : undefined} />
       <TxNotice state={approveTx.state} />
       <TxNotice state={topUpTx.state} />
     </div>

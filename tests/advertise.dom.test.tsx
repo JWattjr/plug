@@ -7,6 +7,7 @@ import { WagmiProvider, createConfig, custom } from 'wagmi'
 import { connect, disconnect } from 'wagmi/actions'
 import { injected } from 'wagmi/connectors'
 import { arc } from 'viem/chains'
+import { allowanceTransports, resetDirectAllowanceClient } from '../src/hooks/useUsdc'
 import { TX_TIMING } from '../src/hooks/useTx'
 import Advertise from '../src/pages/Advertise'
 import { FakeChain } from './fakeChain'
@@ -32,6 +33,12 @@ function makeConfig(chain: FakeChain) {
 }
 
 let h: Harness
+
+/** The direct (unbatched) read path talks to the same fake node, never the real network. */
+function useFakeDirectTransport(chain: FakeChain) {
+  allowanceTransports.direct = () => custom({ request: chain.rpc as never }, { retryCount: 0 })
+  resetDirectAllowanceClient()
+}
 
 async function mount(chain: FakeChain, ui: (children: ReactNode) => ReactNode = (c) => c): Promise<Harness> {
   const config = makeConfig(chain)
@@ -106,6 +113,7 @@ describe('Advertise approval step (Arc mainnet, 6 decimals)', () => {
   beforeEach(() => {
     chain = new FakeChain()
     TX_TIMING.receiptTimeoutMs = 400
+    useFakeDirectTransport(chain)
   })
 
   test('allowance 10000 and budget 0.01 go straight to Create campaign', async () => {
@@ -267,5 +275,85 @@ describe('Advertise approval step (Arc mainnet, 6 decimals)', () => {
     await click(/Step 1 of 2: Allow/)
     await until(showing(/Create campaign/), 'Create campaign')
     expect(chain.sentTransactions).toHaveLength(0)
+  })
+})
+
+describe('Advertise when the usual allowance read fails', () => {
+  let chain: FakeChain
+  beforeEach(() => {
+    chain = new FakeChain()
+    TX_TIMING.receiptTimeoutMs = 400
+    useFakeDirectTransport(chain)
+  })
+
+  test('a batched read that is refused falls back to a direct call and reaches Create campaign', async () => {
+    chain.setAllowance(OWNER, ONE_CENT)
+    chain.failMulticall = true
+    h = await mount(chain)
+    await typeBudget('0.01')
+    await until(showing(/Create campaign/), 'Create campaign via direct call')
+    expect(mainAction().join('|')).not.toMatch(/Allow 0/)
+    expect(text()).toContain('direct Arc RPC call')
+    expect(chain.sentTransactions).toHaveLength(0)
+  })
+
+  test('when every public RPC path fails, the wallet network on chain 5042 answers', async () => {
+    chain.setAllowance(OWNER, ONE_CENT)
+    chain.failMulticall = true
+    chain.walletReads = true
+    // Make the direct call fail too: only the wallet can answer.
+    allowanceTransports.direct = () => custom({ request: async () => { throw new Error('HTTP request failed. Status: 429') } }, { retryCount: 0 })
+    resetDirectAllowanceClient()
+    h = await mount(chain)
+    await typeBudget('0.01')
+    await until(showing(/Create campaign/), 'Create campaign via wallet')
+    expect(text()).toContain('your wallet')
+    expect(chain.sentTransactions).toHaveLength(0)
+  })
+
+  test('a wallet on the wrong chain is never trusted: the failure is shown with its real details, no approval', async () => {
+    chain.setAllowance(OWNER, ONE_CENT)
+    chain.failMulticall = true
+    chain.walletReads = true
+    allowanceTransports.direct = () => custom({ request: async () => { throw new Error('HTTP request failed. Status: 503') } }, { retryCount: 0 })
+    resetDirectAllowanceClient()
+    h = await mount(chain)
+    chain.walletChainId = 1 // drifts after the page connected
+    await typeBudget('0.01')
+    await until(showing(/Retry allowance check/), 'error state', 10000)
+    expect(mainAction().join('|')).not.toMatch(/Allow 0|Create campaign/)
+    const details = h.container.querySelector('[data-testid="allowance-diagnostics"]')?.textContent ?? ''
+    expect(details).toContain(`Connected account: ${OWNER}`)
+    expect(details).toContain('Target network: Arc (chain 5042)')
+    expect(details).toContain('Spender (Plug): 0xaa5364de35d65633ad031ff4da4f941e0de6f913')
+    expect(details).toContain('rate limit exceeded')
+    expect(details).toContain('Status: 503')
+    expect(details).toContain('Wallet is on chain 1, not 5042')
+    expect(details).toContain('rpc.mainnet.arc.io')
+    expect(chain.sentTransactions).toHaveLength(0)
+  })
+
+  test('another account with a successful zero allowance requires approval and says whose allowance it is', async () => {
+    chain.setAllowance(OWNER, ONE_CENT)
+    chain.setAllowance(OTHER, 0n)
+    chain.account = OTHER
+    h = await mount(chain)
+    await typeBudget('0.01')
+    await until(showing(/Step 1 of 2: Allow 0\.01 USDC/), 'Allow')
+    const summary = h.container.querySelector('[data-testid="allowance-summary"]')?.textContent ?? ''
+    expect(summary).toContain('0x535d…b13b')
+    expect(summary).toContain('0.00 USDC')
+    expect(summary).toContain('has not allowed Plug any USDC')
+  })
+
+  test('the approved account shows its allowance and goes straight to Create campaign', async () => {
+    chain.setAllowance(OWNER, ONE_CENT)
+    h = await mount(chain)
+    await typeBudget('0.01')
+    await until(showing(/Create campaign/), 'Create campaign')
+    const summary = h.container.querySelector('[data-testid="allowance-summary"]')?.textContent ?? ''
+    expect(summary).toContain('0xCD64…e289')
+    expect(summary).toContain('0.01 USDC')
+    expect(summary).not.toContain('has not allowed')
   })
 })

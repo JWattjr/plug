@@ -30,7 +30,7 @@ export function useApproval(owner: `0x${string}` | undefined, required: bigint) 
     budget: required,
     receiptAmount,
     read: {
-      data: allowance.data,
+      data: allowance.data?.value,
       isPending: allowance.isPending,
       isError: allowance.isError,
       isIdle: allowance.fetchStatus === 'idle' && allowance.data === undefined,
@@ -56,7 +56,7 @@ export function useApproval(owner: `0x${string}` | undefined, required: bigint) 
     // Never pay for an approval on a stale or failed read.
     const fresh = await refetch()
     if (fresh.isError || fresh.data === undefined) return false
-    if (fresh.data >= required) return true
+    if (fresh.data.value >= required) return true
 
     const receipt = await approveTx.run(() =>
       approveTx.writeContractAsync({ address: token, abi: erc20Abi, functionName: 'approve', args: [spender, required], chainId: PLUG.chainId }),
@@ -67,5 +67,18 @@ export function useApproval(owner: `0x${string}` | undefined, required: bigint) 
     return true
   }, [approveTx, key, owner, refetch, required])
 
-  return { gate, approve, retry, retrying: allowance.isFetching, approveTx, unconfirmed, clearProof }
+  return {
+    gate,
+    approve,
+    retry,
+    retrying: allowance.isFetching,
+    approveTx,
+    unconfirmed,
+    clearProof,
+    owner,
+    /** The last successful read: value, which path answered, and every attempt. */
+    reading: allowance.data,
+    /** Set when the latest read failed. An AllowanceReadError carries every attempt. */
+    error: allowance.error ?? undefined,
+  }
 }
