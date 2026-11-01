@@ -5,12 +5,16 @@ import { parseOnchainError } from '@/lib/errors'
 import { PLUG } from '@/plug.config'
 import { useRefreshPlug } from '@/hooks/useCampaigns'
 
+/** Give up waiting for a receipt after this long and ask the user to check the explorer. Tests shorten it. */
+export const TX_TIMING = { receiptTimeoutMs: 120_000 }
+
 export type TxState =
   | { status: 'idle' }
   | { status: 'wallet' }
   | { status: 'confirming'; hash: Hash }
   | { status: 'success'; hash: Hash; receipt: TransactionReceipt }
-  | { status: 'error'; message: string }
+  /** `hash` is set when the transaction was sent but its outcome could not be confirmed. Do not resend. */
+  | { status: 'error'; message: string; hash?: Hash }
 
 /**
  * One transaction at a time: switches the wallet to the right network, asks for a
@@ -30,20 +34,35 @@ export function useTx() {
   const run = useCallback(
     async (send: () => Promise<Hash>): Promise<TransactionReceipt | null> => {
       setState({ status: 'wallet' })
+      let sentHash: Hash | undefined
       try {
         if (chainId !== PLUG.chainId) await switchChainAsync({ chainId: PLUG.chainId })
         const hash = await send()
+        sentHash = hash
         setState({ status: 'confirming', hash })
         if (!client) throw new Error('network: no RPC client')
-        const receipt = await client.waitForTransactionReceipt({ hash, pollingInterval: 1000 })
-        if (receipt.status !== 'success') throw new Error('Transaction reverted')
+        const receipt = await client.waitForTransactionReceipt({ hash, pollingInterval: 1000, timeout: TX_TIMING.receiptTimeoutMs })
+        if (receipt.status !== 'success') {
+          // A mined revert is final: the transaction did nothing, so it is safe to try again.
+          sentHash = undefined
+          throw new Error('Transaction reverted')
+        }
         setState({ status: 'success', hash, receipt })
         await refresh()
         return receipt
       } catch (error) {
         const message = parseOnchainError(error)
         if (message !== null) console.error('[plug] transaction failed', error)
-        setState(message === null ? { status: 'idle' } : { status: 'error', message })
+        if (sentHash) {
+          // The wallet already broadcast it. A failed receipt lookup says nothing about the outcome.
+          setState({
+            status: 'error',
+            hash: sentHash,
+            message: 'Your transaction was sent, but we could not confirm it yet. Check it on the explorer before sending anything again.',
+          })
+        } else {
+          setState(message === null ? { status: 'idle' } : { status: 'error', message })
+        }
         return null
       }
     },

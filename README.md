@@ -115,6 +115,14 @@ npm run build
 forge test
 ```
 
+Frontend approval regression tests (Bun, using a fake chain and wallet with no real transactions):
+
+```bash
+bun run test
+```
+
+The 33 tests cover allowance reads, refresh and account switching, matching approval receipts, and failures that must not trigger another paid approval. The approval-flow changes were authored in the same Arc Studio project.
+
 The production output is `dist/`. The legacy peer dependency flag accommodates the Vite 6 project and the Vite <=5 peer declaration in `vite-plugin-node-polyfills`. Vercel uses the Vite framework preset, install command `npm install --legacy-peer-deps`, build command `npm run build`, and output directory `dist`. SPA rewrites in `vercel.json` support direct visits to routes such as `/offers` and `/checkout/0`.
 
 ## Next steps

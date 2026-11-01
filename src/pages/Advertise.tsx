@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { erc20Abi, isAddress, parseEventLogs } from 'viem'
+import { isAddress, parseEventLogs } from 'viem'
 import { ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { ErrorNote, InfoNote, Page, PageTitle, Spinner, Step, TxNotice, type StepStatus } from '@/components/ui'
+import { ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { MyCampaigns } from '@/components/MyCampaigns'
 import { useTx } from '@/hooks/useTx'
-import { useUsdcAllowance, useUsdcBalance } from '@/hooks/useUsdc'
+import { useApproval } from '@/hooks/useApproval'
+import { useUsdcBalance } from '@/hooks/useUsdc'
 import { useWalletGate } from '@/hooks/useWalletGate'
 import { commissionFor, fmtNumber, fmtUsdc, parseUsdcInput, sameAddress } from '@/lib/money'
 import { plugAbi } from '@/lib/plugAbi'
@@ -52,12 +54,9 @@ const decimalOnly = (value: string) => (/^\d*\.?\d*$/.test(value) ? value : null
 export default function Advertise() {
   const gate = useWalletGate()
   const balance = useUsdcBalance(gate.address)
-  const allowance = useUsdcAllowance(gate.address)
-  const approveTx = useTx()
   const createTx = useTx()
   const [form, setForm] = useState<FormState>(INITIAL)
   const [touched, setTouched] = useState(false)
-  const [approvedAmount, setApprovedAmount] = useState(0n)
   const [createdId, setCreatedId] = useState<bigint | null>(null)
 
   const set = (key: 'title' | 'offerUrl' | 'price' | 'commissionPct' | 'budget' | 'days' | 'arbiter') => (value: string) => setForm((f) => ({ ...f, [key]: value }))
@@ -91,24 +90,27 @@ export default function Advertise() {
   const haveBalance = balance.data
   const insufficient = haveBalance !== undefined && budget > haveBalance
   const valid = Object.keys(errors).length === 0 && !insufficient
-  const effectiveAllowance = (allowance.data ?? 0n) > approvedAmount ? (allowance.data ?? 0n) : approvedAmount
-  const needsApproval = budget > 0n && effectiveAllowance < budget
+  // Unknown is not zero: only a successful read (or a verified approval receipt) may ask for an approval.
+  const approval = useApproval(gate.address, budget)
+  const approvalGate = approval.gate
+  const needsApproval = approvalGate.kind === 'required'
+  // An approval that was sent but not confirmed blocks a second one until the chain shows it or the user starts over.
+  const holdApproval = holdsApproval(approval)
+  const approveTx = approval.approveTx
 
   const perSaleCommission = parsed.price !== undefined && Number.isFinite(parsed.bps) ? commissionFor(parsed.price, parsed.bps) : 0n
   const salesCovered = perSaleCommission > 0n ? budget / perSaleCommission : undefined
 
   async function approve() {
     setTouched(true)
-    if (!valid || !PLUG.usdcAddress || !PLUG.address) return
-    const receipt = await approveTx.run(() =>
-      approveTx.writeContractAsync({ address: PLUG.usdcAddress!, abi: erc20Abi, functionName: 'approve', args: [PLUG.address!, budget], chainId: PLUG.chainId }),
-    )
-    if (receipt) setApprovedAmount(budget)
+    if (!valid || approvalGate.kind !== 'required') return
+    await approval.approve()
   }
 
   async function create() {
     setTouched(true)
     if (!valid || parsed.price === undefined || !PLUG.address) return
+    if (approvalGate.kind !== 'ready' && approvalGate.kind !== 'none') return
     const endTime = BigInt(nowSeconds() + parsed.days * 86_400)
     const receipt = await createTx.run(() =>
       createTx.writeContractAsync({
@@ -133,12 +135,12 @@ export default function Advertise() {
       setCreatedId(event?.args.id ?? null)
       setForm(INITIAL)
       setTouched(false)
-      setApprovedAmount(0n)
+      approval.clearProof()
     }
   }
 
-  const approveStatus: StepStatus = !needsApproval ? 'done' : approveTx.busy ? 'active' : 'active'
-  const createStatus: StepStatus = needsApproval ? 'todo' : 'active'
+  const approveStatus: StepStatus = approvalGate.kind === 'ready' || approvalGate.kind === 'none' ? 'done' : 'active'
+  const createStatus: StepStatus = approveStatus === 'done' ? 'active' : 'todo'
   const busy = approveTx.busy || createTx.busy
 
   let action: React.ReactNode
@@ -146,6 +148,8 @@ export default function Advertise() {
     action = <button className="btn btn-primary w-full" onClick={gate.connect}>Connect wallet to continue</button>
   } else if (gate.wrongNetwork) {
     action = <button className="btn btn-primary w-full" onClick={gate.switchNetwork}>Switch to {PLUG.chainName}</button>
+  } else if (holdApproval) {
+    action = <ApprovalHoldButton approval={approval} disabled={busy} />
   } else if (needsApproval) {
     action = (
       <button className="btn btn-primary w-full" disabled={busy || (touched && !valid)} onClick={() => void approve()}>
@@ -256,11 +260,12 @@ export default function Advertise() {
           )}
 
           <ol className="space-y-3">
-            <Step index={1} title="Allow USDC" status={budget === 0n ? 'done' : approveStatus} detail={budget === 0n ? 'Not needed for a zero budget' : needsApproval ? `Lets Plug lock ${fmtUsdc(budget)}` : 'Allowed'} />
+            <Step index={1} title="Allow USDC" status={budget === 0n ? 'done' : approveStatus} detail={budget === 0n ? 'Not needed for a zero budget' : needsApproval ? `Lets Plug lock ${fmtUsdc(budget)}` : holdApproval ? 'Checking your current allowance' : 'Allowed'} />
             <Step index={2} title="Create campaign" status={createStatus} detail="Locks your budget and publishes the offer" />
           </ol>
 
           {action}
+          {gate.isConnected && !gate.wrongNetwork && <ApprovalNotice approval={approval} onStartOver={approveTx.reset} />}
           <TxNotice state={approveTx.state} />
           <TxNotice state={createTx.state} />
 

@@ -1,15 +1,17 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { erc20Abi, isAddress, parseEventLogs } from 'viem'
+import { isAddress, parseEventLogs } from 'viem'
 import { usePublicClient } from 'wagmi'
 import { ArrowUpRight, Bot, Megaphone, ShieldCheck, Store } from 'lucide-react'
+import { ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { ErrorNote, Page, Skeleton, Spinner, SponsoredBadge, Step, TxLink, TxNotice, type StepStatus } from '@/components/ui'
 import { SplitVisual } from '@/components/SplitVisual'
 import { ProtectionBadge } from '@/components/ProtectionBadge'
 import { PLUG_QUERY_KEY, useNow } from '@/hooks/useCampaigns'
 import { useTx } from '@/hooks/useTx'
-import { useUsdcAllowance, useUsdcBalance } from '@/hooks/useUsdc'
+import { useApproval } from '@/hooks/useApproval'
+import { useUsdcBalance } from '@/hooks/useUsdc'
 import { useWalletGate } from '@/hooks/useWalletGate'
 import { isLive, isProtected, safeHref, type Campaign } from '@/lib/campaigns'
 import { explainCommission, UNDELIVERABLE_REASON } from '@/lib/commission'
@@ -52,11 +54,10 @@ export default function Checkout() {
   const now = useNow()
   const { data: campaign, isLoading, error } = useCampaign(id)
   const balance = useUsdcBalance(gate.address)
-  const allowance = useUsdcAllowance(gate.address)
-  const approveTx = useTx()
+  const approval = useApproval(gate.address, campaign?.price ?? 0n)
+  const approveTx = approval.approveTx
   const buyTx = useTx()
   const navigate = useNavigate()
-  const [approved, setApproved] = useState(0n)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const snapshot = useRef<Campaign | null>(null)
 
@@ -96,8 +97,10 @@ export default function Checkout() {
   const price = campaign.price
   const haveBalance = balance.data
   const insufficient = haveBalance !== undefined && haveBalance < price
-  const effectiveAllowance = (allowance.data ?? 0n) > approved ? (allowance.data ?? 0n) : approved
-  const needsApproval = effectiveAllowance < price
+  // Unknown is not zero: only a successful read (or a verified approval receipt) may ask for an approval.
+  const needsApproval = approval.gate.kind === 'required'
+  const holdApproval = holdsApproval(approval)
+  const canBuy = approval.gate.kind === 'ready'
   const busy = approveTx.busy || buyTx.busy
   const protectedOffer = isProtected(campaign)
   const buyerIsArbiter = protectedOffer && sameAddress(campaign.arbiter, gate.address)
@@ -105,15 +108,12 @@ export default function Checkout() {
   const endedReason = !campaign.active ? 'This campaign was closed by the seller.' : !live ? 'This campaign has ended.' : undefined
 
   async function approve() {
-    if (!PLUG.usdcAddress || !PLUG.address) return
-    const done = await approveTx.run(() =>
-      approveTx.writeContractAsync({ address: PLUG.usdcAddress!, abi: erc20Abi, functionName: 'approve', args: [PLUG.address!, price], chainId: PLUG.chainId }),
-    )
-    if (done) setApproved(price)
+    if (approval.gate.kind !== 'required') return
+    await approval.approve()
   }
 
   async function buy() {
-    if (!PLUG.address || id === undefined) return
+    if (!PLUG.address || id === undefined || !canBuy) return
     snapshot.current = current
     const done = await buyTx.run(() =>
       buyTx.writeContractAsync({
@@ -125,6 +125,7 @@ export default function Checkout() {
       }),
     )
     if (!done) return
+    approval.clearProof()
     if (protectedOffer) {
       const [placed] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'OrderPlaced' }).filter((log) => sameAddress(log.address, PLUG.address))
       if (placed) navigate(`/orders/${placed.args.orderId.toString()}`)
@@ -145,12 +146,13 @@ export default function Checkout() {
     })
   }
 
-  const approveStatus: StepStatus = needsApproval ? 'active' : 'done'
-  const buyStatus: StepStatus = needsApproval ? 'todo' : 'active'
+  const approveStatus: StepStatus = canBuy ? 'done' : 'active'
+  const buyStatus: StepStatus = canBuy ? 'active' : 'todo'
 
   let action: React.ReactNode
   if (!gate.isConnected) action = <button className="btn btn-primary w-full" onClick={gate.connect}>Connect wallet to buy</button>
   else if (gate.wrongNetwork) action = <button className="btn btn-primary w-full" onClick={gate.switchNetwork}>Switch to {PLUG.chainName}</button>
+  else if (holdApproval) action = <ApprovalHoldButton approval={approval} disabled={!live || busy} />
   else if (needsApproval)
     action = (
       <button className="btn btn-primary w-full" disabled={!live || insufficient || busy} onClick={() => void approve()}>
@@ -266,10 +268,11 @@ export default function Checkout() {
               )}
 
               <ol className="space-y-3">
-                <Step index={1} title="Allow USDC" status={approveStatus} detail={needsApproval ? `Lets Plug take ${fmtUsdc(price)}` : 'Allowed'} />
+                <Step index={1} title="Allow USDC" status={approveStatus} detail={needsApproval ? `Lets Plug take ${fmtUsdc(price)}` : holdApproval ? 'Checking your current allowance' : 'Allowed'} />
                 <Step index={2} title="Buy" status={buyStatus} detail="Pays the seller and the agent in one transaction" />
               </ol>
               {action}
+              {gate.isConnected && !gate.wrongNetwork && <ApprovalNotice approval={approval} onStartOver={approveTx.reset} />}
               <TxNotice state={approveTx.state} />
               <TxNotice state={buyTx.state} />
             </div>

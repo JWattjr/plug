@@ -12,6 +12,7 @@
     "lint": "oxlint --type-aware src scripts --fix; s=$?; oxlint --fix .; exit $((s>0?s:$?))",
     "typecheck": "tsc --noEmit",
     "check": "bash scripts/check.sh",
+    "test": "bun test tests",
     "contracts:build": "forge build",
     "contracts:test": "forge test"
   },
@@ -42,11 +43,13 @@
     "viem": "2.57.5"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "21.0.4",
     "@types/node": "^24.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "happy-dom": "^21.0.4",
     "oxlint": "^1.80.0",
     "oxlint-tsgolint": "^7.0.2001",
     "postcss": "^8.4.49",

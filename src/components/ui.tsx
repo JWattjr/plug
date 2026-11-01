@@ -90,7 +90,14 @@ export function TxNotice({ state, waitingLabel = 'Confirm in your wallet' }: { s
       </p>
     )
   }
-  if (state.status === 'error') return <ErrorNote>{state.message}</ErrorNote>
+  if (state.status === 'error') {
+    return (
+      <ErrorNote>
+        <p>{state.message}</p>
+        {state.hash && <div className="mt-1"><TxLink hash={state.hash} label="Open transaction" /></div>}
+      </ErrorNote>
+    )
+  }
   return null
 }
 

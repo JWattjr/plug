@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { erc20Abi } from 'viem'
 import { motion } from 'framer-motion'
+import { ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { EmptyState, InfoNote, Skeleton, Spinner, TxNotice } from '@/components/ui'
 import { OrderCard } from '@/components/OrderCard'
 import { ProtectionBadge } from '@/components/ProtectionBadge'
 import { useOrders, usePlugLogs } from '@/hooks/useOrders'
 import { useCampaigns, useNow } from '@/hooks/useCampaigns'
 import { useTx } from '@/hooks/useTx'
-import { useUsdcAllowance, useUsdcBalance } from '@/hooks/useUsdc'
+import { useApproval } from '@/hooks/useApproval'
+import { useUsdcBalance } from '@/hooks/useUsdc'
 import { useWalletGate } from '@/hooks/useWalletGate'
 import { isLive, isProtected, type Campaign } from '@/lib/campaigns'
 import { fmtBps, fmtNumber, fmtUsdc, parseUsdcInput, sameAddress } from '@/lib/money'
@@ -27,35 +28,32 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }) {
   const [amount, setAmount] = useState('')
-  const [approved, setApproved] = useState(0n)
-  const approveTx = useTx()
   const topUpTx = useTx()
-  const allowance = useUsdcAllowance(owner)
   const balance = useUsdcBalance(owner)
 
   const raw = parseUsdcInput(amount)
   const valid = raw !== undefined && raw > 0n
-  const have = (allowance.data ?? 0n) > approved ? (allowance.data ?? 0n) : approved
-  const needsApproval = valid && have < raw
+  // Unknown is not zero: only a successful read (or a verified approval receipt) may ask for an approval.
+  const approval = useApproval(owner, valid ? raw : 0n)
+  const approveTx = approval.approveTx
+  const needsApproval = approval.gate.kind === 'required'
+  const holdApproval = holdsApproval(approval)
   const insufficient = valid && balance.data !== undefined && raw > balance.data
   const busy = approveTx.busy || topUpTx.busy
 
   async function approve() {
-    if (!valid || !PLUG.usdcAddress || !PLUG.address) return
-    const receipt = await approveTx.run(() =>
-      approveTx.writeContractAsync({ address: PLUG.usdcAddress!, abi: erc20Abi, functionName: 'approve', args: [PLUG.address!, raw], chainId: PLUG.chainId }),
-    )
-    if (receipt) setApproved(raw)
+    if (!valid || approval.gate.kind !== 'required') return
+    await approval.approve()
   }
 
   async function topUp() {
-    if (!valid || !PLUG.address) return
+    if (!valid || !PLUG.address || approval.gate.kind !== 'ready') return
     const receipt = await topUpTx.run(() =>
       topUpTx.writeContractAsync({ address: PLUG.address!, abi: plugAbi, functionName: 'topUp', args: [campaign.id, raw], chainId: PLUG.chainId }),
     )
     if (receipt) {
       setAmount('')
-      setApproved(0n)
+      approval.clearProof()
     }
   }
 
@@ -70,17 +68,20 @@ function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }
           value={amount}
           onChange={(e) => /^\d*\.?\d*$/.test(e.target.value) && setAmount(e.target.value)}
         />
-        {needsApproval ? (
+        {holdApproval ? (
+          <ApprovalHoldButton approval={approval} disabled={busy} className="btn" compact />
+        ) : needsApproval ? (
           <button className="btn btn-primary" disabled={busy || insufficient} onClick={() => void approve()}>
             {approveTx.busy && <Spinner />} Allow
           </button>
         ) : (
-          <button className="btn btn-primary" disabled={!valid || busy || insufficient} onClick={() => void topUp()}>
+          <button className="btn btn-primary" disabled={!valid || busy || insufficient || approval.gate.kind !== 'ready'} onClick={() => void topUp()}>
             {topUpTx.busy && <Spinner />} Add
           </button>
         )}
       </div>
       {insufficient && <p className="text-xs" style={{ color: 'var(--danger)' }}>Insufficient USDC for that amount.</p>}
+      <ApprovalNotice approval={approval} onStartOver={approveTx.reset} />
       <TxNotice state={approveTx.state} />
       <TxNotice state={topUpTx.state} />
     </div>
