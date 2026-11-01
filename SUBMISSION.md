@@ -10,7 +10,7 @@
   - Create campaign: https://explorer.arc.io/tx/0xad9b9e9037e81e9b104ee2834c6871a00d055cf8bec405db32e298d7f836a58c (campaign 0; 0.01 USDC budget funded on Arc mainnet, block 28995339).
   - Purchase with seller/agent split: TODO
   - End campaign refund: TODO
-- Video walkthrough: TODO
+- Video walkthrough: https://youtu.be/7otQT6IlFR8
 - Builder profile: TODO
 
 ## Description (3 sentences)
@@ -32,4 +32,4 @@ The seller chooses a 3 to 30 day protection window in the app and a public arbit
 - Arc Testnet contract address: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` (chain ID 5042002)
 - Arc Testnet contract explorer: https://explorer.testnet.arc.io/address/0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9
 
-The mainnet contract, deployment transaction, and confirmed campaign-funding transaction are linked above. Purchase with split, end-campaign refund, video walkthrough, and builder profile remain TODO. The campaign uses a demonstration title/offer URL; it is not evidence of a delivered product or a completed purchase. This document is a submission draft; no grant form has been submitted.
+The mainnet contract, deployment transaction, confirmed campaign-funding transaction, and video walkthrough are linked above. Purchase with split, end-campaign refund, and builder profile remain TODO. The campaign uses a demonstration title/offer URL; it is not evidence of a delivered product or a completed purchase. This document is a submission draft; no grant form has been submitted.

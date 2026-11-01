@@ -90,6 +90,8 @@ Application and contract changes are made through Arc Studio. Later Arc Studio e
 
 - Live app: https://plug-tawny.vercel.app
 - Public repository: https://github.com/JWattjr/plug
+- Demo video: https://youtu.be/7otQT6IlFR8
+- Mainnet campaign funding: https://explorer.arc.io/tx/0xad9b9e9037e81e9b104ee2834c6871a00d055cf8bec405db32e298d7f836a58c (campaign 0, 0.01 USDC advertising budget; demonstration offer).
 - Current Arc mainnet contract: `0xaa5364de35d65633ad031ff4da4f941e0de6f913`
 - Arc mainnet contract explorer: https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913
 - Mainnet deploy transaction: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1
