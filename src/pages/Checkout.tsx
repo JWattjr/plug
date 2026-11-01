@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { isAddress, parseEventLogs } from 'viem'
+import { BaseError, ContractFunctionRevertedError, isAddress, parseEventLogs, type TransactionReceipt } from 'viem'
 import { usePublicClient } from 'wagmi'
 import { ArrowUpRight, Bot, Megaphone, ShieldCheck, Store } from 'lucide-react'
 import { AllowanceSummary, ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { ErrorNote, Page, Skeleton, Spinner, SponsoredBadge, Step, TxLink, TxNotice, type StepStatus } from '@/components/ui'
+import { ReadError } from '@/components/ReadStatus'
 import { SplitVisual } from '@/components/SplitVisual'
 import { ProtectionBadge } from '@/components/ProtectionBadge'
 import { PLUG_QUERY_KEY, useNow } from '@/hooks/useCampaigns'
@@ -28,13 +29,24 @@ interface Receipt {
   reason?: string
 }
 
+/** True only for the contract's own "no such campaign" revert, never for a failed read. */
+export function isCampaignNotFound(error: unknown): boolean {
+  if (error instanceof BaseError) {
+    const reverted = error.walk((e) => e instanceof ContractFunctionRevertedError)
+    if (reverted instanceof ContractFunctionRevertedError && reverted.data?.errorName === 'CampaignNotFound') return true
+  }
+  return false
+}
+
 function useCampaign(id: bigint | undefined) {
   const client = usePublicClient({ chainId: PLUG.chainId })
   return useQuery({
     queryKey: [...PLUG_QUERY_KEY, 'campaign', PLUG.address, id?.toString()],
     enabled: id !== undefined && Boolean(client && PLUG.address),
     refetchInterval: 8_000,
-    retry: false,
+    // A missing campaign is a definite answer (no retry needed). Anything else gets one more try.
+    retry: (count, error) => !isCampaignNotFound(error) && count < 1,
+    retryDelay: 1_000,
     queryFn: async (): Promise<Campaign> => {
       const row = await client!.readContract({ address: PLUG.address!, abi: plugAbi, functionName: 'getCampaign', args: [id!] })
       return { id: id!, ...row }
@@ -52,14 +64,41 @@ export default function Checkout() {
 
   const gate = useWalletGate()
   const now = useNow()
-  const { data: campaign, isLoading, error } = useCampaign(id)
+  const { data: campaign, isLoading, error, refetch, isFetching } = useCampaign(id)
   const balance = useUsdcBalance(gate.address)
   const approval = useApproval(gate.address, campaign?.price ?? 0n)
   const approveTx = approval.approveTx
-  const buyTx = useTx()
+  const afterBought = useRef<((done: TransactionReceipt) => void) | null>(null)
+  const buyTx = useTx({ scope: id === undefined ? undefined : `buy-${id.toString()}`, onRecovered: (done) => afterBought.current?.(done) })
   const navigate = useNavigate()
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const snapshot = useRef<Campaign | null>(null)
+
+  function handleBought(done: TransactionReceipt) {
+    approval.clearProof()
+    if (campaign && isProtected(campaign)) {
+      const [placed] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'OrderPlaced' }).filter((log) => sameAddress(log.address, PLUG.address))
+      if (placed) navigate(`/orders/${placed.args.orderId.toString()}`)
+      return
+    }
+    const [event] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'Purchase' }).filter(
+      (log) => sameAddress(log.address, PLUG.address),
+    )
+    const before = snapshot.current ?? campaign
+    if (!event || !before) return
+    const expected = explainCommission(before, event.args.referrer, event.args.buyer)
+    setReceipt({
+      hash: done.transactionHash,
+      price: event.args.price,
+      commission: event.args.commission,
+      referrer: event.args.referrer,
+      reason: event.args.commission > 0n ? undefined : (expected.reason ?? UNDELIVERABLE_REASON),
+    })
+  }
+  // Keep the status-check path pointed at the latest handler.
+  useEffect(() => {
+    afterBought.current = handleBought
+  })
 
   if (id === undefined) {
     return (
@@ -76,6 +115,15 @@ export default function Checkout() {
           <Skeleton className="h-80 !rounded-3xl" />
           <Skeleton className="h-80 !rounded-3xl" />
         </div>
+      </Page>
+    )
+  }
+
+  if (!campaign && error && !isCampaignNotFound(error)) {
+    // The read failed. That says nothing about whether the campaign exists.
+    return (
+      <Page narrow>
+        <ReadError what={`campaign #${id.toString()}`} error={error} onRetry={() => void refetch()} retrying={isFetching} />
       </Page>
     )
   }
@@ -101,7 +149,7 @@ export default function Checkout() {
   const needsApproval = approval.gate.kind === 'required'
   const holdApproval = holdsApproval(approval)
   const canBuy = approval.gate.kind === 'ready'
-  const busy = approveTx.busy || buyTx.busy
+  const busy = approval.busy || buyTx.busy
   const protectedOffer = isProtected(campaign)
   const buyerIsArbiter = protectedOffer && sameAddress(campaign.arbiter, gate.address)
   const windowText = fmtWindowLong(campaign.protectionWindow)
@@ -113,7 +161,8 @@ export default function Checkout() {
   }
 
   async function buy() {
-    if (!PLUG.address || id === undefined || !canBuy) return
+    // A purchase that was sent but not confirmed must be checked, never repeated.
+    if (!PLUG.address || id === undefined || !canBuy || buyTx.unresolved || buyTx.busy) return
     snapshot.current = current
     const done = await buyTx.run(() =>
       buyTx.writeContractAsync({
@@ -124,26 +173,7 @@ export default function Checkout() {
         chainId: PLUG.chainId,
       }),
     )
-    if (!done) return
-    approval.clearProof()
-    if (protectedOffer) {
-      const [placed] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'OrderPlaced' }).filter((log) => sameAddress(log.address, PLUG.address))
-      if (placed) navigate(`/orders/${placed.args.orderId.toString()}`)
-      return
-    }
-    const [event] = parseEventLogs({ abi: plugAbi, logs: done.logs, eventName: 'Purchase' }).filter(
-      (log) => sameAddress(log.address, PLUG.address),
-    )
-    if (!event) return
-    const before = snapshot.current ?? current
-    const expected = explainCommission(before, event.args.referrer, event.args.buyer)
-    setReceipt({
-      hash: done.transactionHash,
-      price: event.args.price,
-      commission: event.args.commission,
-      referrer: event.args.referrer,
-      reason: event.args.commission > 0n ? undefined : (expected.reason ?? UNDELIVERABLE_REASON),
-    })
+    if (done) handleBought(done)
   }
 
   const approveStatus: StepStatus = canBuy ? 'done' : 'active'
@@ -152,11 +182,17 @@ export default function Checkout() {
   let action: React.ReactNode
   if (!gate.isConnected) action = <button className="btn btn-primary w-full" onClick={gate.connect}>Connect wallet to buy</button>
   else if (gate.wrongNetwork) action = <button className="btn btn-primary w-full" onClick={gate.switchNetwork}>Switch to {PLUG.chainName}</button>
+  else if (buyTx.unresolved)
+    action = (
+      <button className="btn btn-ghost w-full" disabled={buyTx.checking} onClick={() => void buyTx.checkStatus()}>
+        {buyTx.checking && <Spinner />} Check purchase status
+      </button>
+    )
   else if (holdApproval) action = <ApprovalHoldButton approval={approval} disabled={!live || busy} />
   else if (needsApproval)
     action = (
       <button className="btn btn-primary w-full" disabled={!live || insufficient || busy} onClick={() => void approve()}>
-        {approveTx.busy && <Spinner />} Step 1 of 2: Allow {fmtUsdc(price)}
+        {approval.busy && <Spinner />} Step 1 of 2: Allow {fmtUsdc(price)}
       </button>
     )
   else
@@ -273,8 +309,8 @@ export default function Checkout() {
               </ol>
               {action}
               {gate.isConnected && !gate.wrongNetwork && <><AllowanceSummary approval={approval} /><ApprovalNotice approval={approval} onStartOver={approveTx.reset} needed={price} /></>}
-              <TxNotice state={approveTx.state} />
-              <TxNotice state={buyTx.state} />
+              <TxNotice state={approveTx.state} onCheck={() => void approveTx.checkStatus()} checking={approveTx.checking} />
+              <TxNotice state={buyTx.state} onCheck={() => void buyTx.checkStatus()} checking={buyTx.checking} />
             </div>
           )}
         </section>

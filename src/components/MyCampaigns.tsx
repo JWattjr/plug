@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
 import { EmptyState, InfoNote, Skeleton, Spinner, TxNotice } from '@/components/ui'
+import { ReadError } from '@/components/ReadStatus'
 import { OrderCard } from '@/components/OrderCard'
 import { ProtectionBadge } from '@/components/ProtectionBadge'
 import { useOrders, usePlugLogs } from '@/hooks/useOrders'
@@ -39,7 +40,7 @@ function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }
   const needsApproval = approval.gate.kind === 'required'
   const holdApproval = holdsApproval(approval)
   const insufficient = valid && balance.data !== undefined && raw > balance.data
-  const busy = approveTx.busy || topUpTx.busy
+  const busy = approval.busy || topUpTx.locked
 
   async function approve() {
     if (!valid || approval.gate.kind !== 'required') return
@@ -72,7 +73,7 @@ function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }
           <ApprovalHoldButton approval={approval} disabled={busy} className="btn" compact />
         ) : needsApproval ? (
           <button className="btn btn-primary" disabled={busy || insufficient} onClick={() => void approve()}>
-            {approveTx.busy && <Spinner />} Allow
+            {approval.busy && <Spinner />} Allow
           </button>
         ) : (
           <button className="btn btn-primary" disabled={!valid || busy || insufficient || approval.gate.kind !== 'ready'} onClick={() => void topUp()}>
@@ -82,8 +83,8 @@ function TopUp({ campaign, owner }: { campaign: Campaign; owner: `0x${string}` }
       </div>
       {insufficient && <p className="text-xs" style={{ color: 'var(--danger)' }}>Insufficient USDC for that amount.</p>}
       <ApprovalNotice approval={approval} onStartOver={approveTx.reset} needed={valid ? raw : undefined} />
-      <TxNotice state={approveTx.state} />
-      <TxNotice state={topUpTx.state} />
+      <TxNotice state={approveTx.state} onCheck={() => void approveTx.checkStatus()} checking={approveTx.checking} />
+      <TxNotice state={topUpTx.state} onCheck={() => void topUpTx.checkStatus()} checking={topUpTx.checking} />
     </div>
   )
 }
@@ -169,20 +170,20 @@ function CampaignRow({ campaign, now, owner }: { campaign: Campaign; now: number
             <button className="btn btn-danger" onClick={() => setConfirmEnd(true)}>End campaign</button>
           ) : (
             <>
-              <button className="btn btn-danger" disabled={endTx.busy} onClick={() => void end()}>
+              <button className="btn btn-danger" disabled={endTx.locked} onClick={() => void end()}>
                 {endTx.busy && <Spinner />} Confirm: end and refund {fmtNumber(campaign.budgetRemaining)} USDC
               </button>
-              <button className="btn btn-ghost" disabled={endTx.busy} onClick={() => setConfirmEnd(false)}>Cancel</button>
+              <button className="btn btn-ghost" disabled={endTx.locked} onClick={() => setConfirmEnd(false)}>Cancel</button>
             </>
           )}
         </div>
       )}
       {!campaign.active && campaign.budgetRemaining > 0n && (
         <div className="mt-4">
-          <button className="btn btn-ghost" disabled={withdrawTx.busy} onClick={() => void withdraw()}>
+          <button className="btn btn-ghost" disabled={withdrawTx.locked} onClick={() => void withdraw()}>
             {withdrawTx.busy && <Spinner />} Withdraw {fmtNumber(campaign.budgetRemaining)} USDC leftover budget
           </button>
-          <div className="mt-2"><TxNotice state={withdrawTx.state} /></div>
+          <div className="mt-2"><TxNotice state={withdrawTx.state} onCheck={() => void withdrawTx.checkStatus()} checking={withdrawTx.checking} /></div>
         </div>
       )}
       {isProtected(campaign) && (
@@ -194,14 +195,14 @@ function CampaignRow({ campaign, now, owner }: { campaign: Campaign; now: number
         </div>
       )}
       {showTopUp && live && <TopUp campaign={campaign} owner={owner} />}
-      <div className="mt-3"><TxNotice state={endTx.state} /></div>
+      <div className="mt-3"><TxNotice state={endTx.state} onCheck={() => void endTx.checkStatus()} checking={endTx.checking} /></div>
     </motion.li>
   )
 }
 
 export function MyCampaigns() {
   const gate = useWalletGate()
-  const { campaigns, isLoading } = useCampaigns()
+  const { campaigns, isLoading, isLoaded, error, refetch } = useCampaigns()
   const now = useNow()
   const mine = campaigns.filter((c) => sameAddress(c.advertiser, gate.address))
 
@@ -212,6 +213,9 @@ export function MyCampaigns() {
         <InfoNote>Connect your wallet to see and manage your campaigns.</InfoNote>
       ) : isLoading ? (
         <Skeleton className="h-40 !rounded-3xl" />
+      ) : !isLoaded ? (
+        // Never show "No campaigns yet" for a list that was not actually read.
+        <ReadError what="your campaigns" error={error ?? new Error('Campaigns have not been read yet')} onRetry={() => void refetch()} />
       ) : mine.length === 0 ? (
         <EmptyState title="No campaigns yet" body="Create your first campaign above. It will show up here with live sales and budget." />
       ) : (

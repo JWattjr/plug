@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Menu, PlugZap, TriangleAlert, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { ReadRouteNotice } from '@/components/ReadStatus'
 import { WalletButton } from '@/components/WalletButton'
 import { useWalletGate } from '@/hooks/useWalletGate'
 import { PLUG, PLUG_CONFIGURED } from '@/plug.config'
@@ -113,6 +114,7 @@ export function Layout() {
       </header>
 
       <NetworkBanner />
+      <ReadRouteNotice />
 
       <main key={location.pathname} className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:py-12">
         <Outlet />

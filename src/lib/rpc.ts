@@ -25,14 +25,16 @@ export function rpcHost(url: string): string {
 
 const URL_RE = /\bhttps?:\/\/[^\s"'<>)]+/gi
 const BEARER_RE = /\bbearer\s+[^\s"',;]+/gi
-const SECRET_PAIR_RE = /\b(api[-_]?key|key|token|_rpc_token|secret|auth(?:orization)?|password)(\s*[=:]\s*)[^\s&"',;]+/gi
+const SECRET_PAIR_RE = /\b(api[-_]?key|key|token|_rpc_token|secret|auth(?:orization)?|password)(\s*[=:]\s*)([^\s&"',;]+)/gi
+/** A bare account or contract address is public data, not a credential, even after the word "token". */
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 
 /** Strip anything that could carry a credential before text is shown or copied. */
 export function redact(text: string): string {
   return text
     .replace(URL_RE, (match) => rpcHost(match))
     .replace(BEARER_RE, 'Bearer [redacted]')
-    .replace(SECRET_PAIR_RE, '$1$2[redacted]')
+    .replace(SECRET_PAIR_RE, (match, key: string, sep: string, value: string) => (ADDRESS_RE.test(value) ? match : `${key}${sep}[redacted]`))
 }
 
 export interface DescribedError {

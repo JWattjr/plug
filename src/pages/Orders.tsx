@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { EmptyState, ErrorNote, InfoNote, Page, PageTitle, Skeleton } from '@/components/ui'
+import { ReadError } from '@/components/ReadStatus'
 import { OrderCard, type OrderRole } from '@/components/OrderCard'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { useOrders, usePlugLogs } from '@/hooks/useOrders'
@@ -13,7 +14,7 @@ import { PLUG_CONFIGURED } from '@/plug.config'
 /** /orders: the connected buyer's protected orders. */
 export function OrdersPage() {
   const gate = useWalletGate()
-  const { orders, isLoading, error } = useOrders()
+  const { orders, isLoading, isLoaded, error, refetch } = useOrders()
   const { campaigns } = useCampaigns()
   const { logs } = usePlugLogs()
   const mine = useMemo(() => orders.filter((o) => sameAddress(o.buyer, gate.address)), [orders, gate.address])
@@ -27,11 +28,13 @@ export function OrdersPage() {
         subtitle="Protected purchases are held in escrow. Confirm when it arrives, dispute if something is wrong, or let the window pass and the seller is paid."
       />
       {!PLUG_CONFIGURED && <ErrorNote>Plug is not configured for this network.</ErrorNote>}
-      {error && <ErrorNote>Could not read orders from the chain. Retrying.</ErrorNote>}
+      {error && isLoaded && <ErrorNote>Could not refresh orders from the chain. Showing the last data that was read. Retrying.</ErrorNote>}
       {!gate.isConnected ? (
         <InfoNote>Connect your wallet to see your orders.</InfoNote>
       ) : isLoading ? (
         <div className="space-y-4">{[0, 1].map((i) => <Skeleton key={i} className="h-60 !rounded-3xl" />)}</div>
+      ) : !isLoaded ? (
+        <ReadError what="your orders" error={error ?? new Error('Orders have not been read yet')} onRetry={() => void refetch()} />
       ) : mine.length === 0 ? (
         <EmptyState
           title="No protected orders yet"
@@ -63,7 +66,7 @@ export function OrderPage() {
   const params = useParams()
   const id = params.id && /^\d+$/.test(params.id) ? BigInt(params.id) : undefined
   const gate = useWalletGate()
-  const { orders, isLoading } = useOrders()
+  const { orders, isLoading, isLoaded, error, refetch } = useOrders()
   const { campaigns } = useCampaigns()
   const { logs } = usePlugLogs()
   const order = orders.find((o) => o.id === id)
@@ -88,6 +91,8 @@ export function OrderPage() {
         <ErrorNote>That is not a valid order link.</ErrorNote>
       ) : isLoading ? (
         <Skeleton className="h-80 !rounded-3xl" />
+      ) : !isLoaded ? (
+        <ReadError what="this order" error={error ?? new Error('Orders have not been read yet')} onRetry={() => void refetch()} />
       ) : !order ? (
         <ErrorNote>Order #{id.toString()} does not exist on this network.</ErrorNote>
       ) : (

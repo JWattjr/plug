@@ -26,6 +26,7 @@ function Stat({ label, value, loading }: { label: string; value: string; loading
 export default function Home() {
   const stats = useStats()
   const loading = PLUG_CONFIGURED && stats.isLoading
+  const unread = PLUG_CONFIGURED && !stats.isLoaded && !stats.isLoading
 
   return (
     <Page>
@@ -75,9 +76,9 @@ export default function Home() {
           <span className="text-xs" style={{ color: 'var(--subtle)' }}>Read from the chain, refreshed every few seconds</span>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Stat label="Campaigns" value={stats.campaigns.toString()} loading={loading} />
-          <Stat label="Sales" value={stats.sales.toString()} loading={loading} />
-          <Stat label="Commission paid" value={`${fmtNumber(stats.commissionPaid)} USDC`} loading={loading} />
+          <Stat label="Campaigns" value={unread ? '—' : stats.campaigns.toString()} loading={loading} />
+          <Stat label="Sales" value={unread ? '—' : stats.sales.toString()} loading={loading} />
+          <Stat label="Commission paid" value={unread ? '—' : `${fmtNumber(stats.commissionPaid)} USDC`} loading={loading} />
         </div>
         {stats.error && (
           <p className="mt-3 text-sm" style={{ color: 'var(--danger)' }}>Could not read the chain right now. Stats will retry.</p>

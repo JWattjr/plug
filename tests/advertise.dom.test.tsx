@@ -7,7 +7,7 @@ import { WagmiProvider, createConfig, custom } from 'wagmi'
 import { connect, disconnect } from 'wagmi/actions'
 import { injected } from 'wagmi/connectors'
 import { arc } from 'viem/chains'
-import { allowanceTransports, resetDirectAllowanceClient } from '../src/hooks/useUsdc'
+import { allowanceTransports, resetAllowanceClients } from '../src/hooks/useUsdc'
 import { TX_TIMING } from '../src/hooks/useTx'
 import Advertise from '../src/pages/Advertise'
 import { FakeChain } from './fakeChain'
@@ -36,8 +36,8 @@ let h: Harness
 
 /** The direct (unbatched) read path talks to the same fake node, never the real network. */
 function useFakeDirectTransport(chain: FakeChain) {
-  allowanceTransports.direct = () => custom({ request: chain.rpc as never }, { retryCount: 0 })
-  resetDirectAllowanceClient()
+  allowanceTransports.http = () => custom({ request: chain.rpc as never }, { retryCount: 0 })
+  resetAllowanceClients()
 }
 
 async function mount(chain: FakeChain, ui: (children: ReactNode) => ReactNode = (c) => c): Promise<Harness> {
@@ -106,6 +106,7 @@ afterEach(async () => {
   })
   h?.queryClient.clear()
   document.body.innerHTML = ''
+  localStorage.clear()
 })
 
 describe('Advertise approval step (Arc mainnet, 6 decimals)', () => {
@@ -302,12 +303,17 @@ describe('Advertise when the usual allowance read fails', () => {
     chain.failMulticall = true
     chain.walletReads = true
     // Make the direct call fail too: only the wallet can answer.
-    allowanceTransports.direct = () => custom({ request: async () => { throw new Error('HTTP request failed. Status: 429') } }, { retryCount: 0 })
-    resetDirectAllowanceClient()
+    allowanceTransports.http = () => custom({ request: async () => { throw new Error('HTTP request failed. Status: 429') } }, { retryCount: 0 })
+    resetAllowanceClients()
     h = await mount(chain)
     await typeBudget('0.01')
     await until(showing(/Create campaign/), 'Create campaign via wallet')
     expect(text()).toContain('your wallet')
+    // The failed public attempts stay inspectable even though the wallet answered.
+    const details = h.container.querySelector('[data-testid="allowance-diagnostics"]')?.textContent ?? ''
+    expect(details).toContain('Attempt 1: Arc RPC (batched)')
+    expect(details).toContain('Attempt 2: Arc RPC (direct call)')
+    expect(details).toContain('Result: 0.01 USDC via Connected wallet network')
     expect(chain.sentTransactions).toHaveLength(0)
   })
 
@@ -315,8 +321,8 @@ describe('Advertise when the usual allowance read fails', () => {
     chain.setAllowance(OWNER, ONE_CENT)
     chain.failMulticall = true
     chain.walletReads = true
-    allowanceTransports.direct = () => custom({ request: async () => { throw new Error('HTTP request failed. Status: 503') } }, { retryCount: 0 })
-    resetDirectAllowanceClient()
+    allowanceTransports.http = () => custom({ request: async () => { throw new Error('HTTP request failed. Status: 503') } }, { retryCount: 0 })
+    resetAllowanceClients()
     h = await mount(chain)
     chain.walletChainId = 1 // drifts after the page connected
     await typeBudget('0.01')
@@ -326,8 +332,8 @@ describe('Advertise when the usual allowance read fails', () => {
     expect(details).toContain(`Connected account: ${OWNER}`)
     expect(details).toContain('Target network: Arc (chain 5042)')
     expect(details).toContain('Spender (Plug): 0xaa5364de35d65633ad031ff4da4f941e0de6f913')
-    expect(details).toContain('rate limit exceeded')
     expect(details).toContain('Status: 503')
+    expect(details).toContain('USDC token: 0x3600000000000000000000000000000000000000')
     expect(details).toContain('Wallet is on chain 1, not 5042')
     expect(details).toContain('rpc.mainnet.arc.io')
     expect(chain.sentTransactions).toHaveLength(0)

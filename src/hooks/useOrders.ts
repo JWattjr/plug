@@ -16,6 +16,8 @@ export function useOrders() {
     queryKey: [...PLUG_QUERY_KEY, 'orders', PLUG.address],
     enabled: PLUG_CONFIGURED && Boolean(client),
     refetchInterval: 8_000,
+    retry: 1,
+    retryDelay: 1_000,
     queryFn: async (): Promise<Order[]> => {
       if (!client || !PLUG.address) return []
       const address = PLUG.address
@@ -33,13 +35,13 @@ export function useOrders() {
     },
   })
   const orders = useMemo(() => query.data ?? [], [query.data])
-  return { orders, isLoading: query.isLoading, error: query.error }
+  return { orders, isLoading: query.isLoading, isLoaded: query.data !== undefined, error: query.error, refetch: query.refetch }
 }
 
 export function useOrdersOf(filter: (order: Order) => boolean) {
-  const { orders, isLoading, error } = useOrders()
+  const { orders, isLoading, isLoaded, error } = useOrders()
   const mine = useMemo(() => orders.filter(filter), [orders, filter])
-  return { orders: mine, isLoading, error }
+  return { orders: mine, isLoading, isLoaded, error }
 }
 
 export const isBuyer = (address: string | undefined) => (order: Order) => sameAddress(order.buyer, address)

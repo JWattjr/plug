@@ -75,7 +75,18 @@ export function InfoNote({ children }: { children: ReactNode }) {
 }
 
 /** Honest transaction status: only states the wallet or the chain reported. */
-export function TxNotice({ state, waitingLabel = 'Confirm in your wallet' }: { state: TxState; waitingLabel?: string }) {
+export function TxNotice({
+  state,
+  waitingLabel = 'Confirm in your wallet',
+  onCheck,
+  checking,
+}: {
+  state: TxState
+  waitingLabel?: string
+  /** Read-only status check for a transaction that was sent but could not be confirmed. */
+  onCheck?: () => void
+  checking?: boolean
+}) {
   if (state.status === 'wallet') {
     return (
       <p className="flex items-center gap-2 text-sm" style={{ color: 'var(--muted)' }}>
@@ -90,14 +101,22 @@ export function TxNotice({ state, waitingLabel = 'Confirm in your wallet' }: { s
       </p>
     )
   }
-  if (state.status === 'error') {
+  if (state.status === 'unresolved') {
     return (
       <ErrorNote>
         <p>{state.message}</p>
-        {state.hash && <div className="mt-1"><TxLink hash={state.hash} label="Open transaction" /></div>}
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <TxLink hash={state.hash} label="Open transaction" />
+          {onCheck && (
+            <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold underline" disabled={checking} onClick={onCheck}>
+              {checking && <Loader2 className="size-3 animate-spin" />} Check status
+            </button>
+          )}
+        </div>
       </ErrorNote>
     )
   }
+  if (state.status === 'error') return <ErrorNote>{state.message}</ErrorNote>
   return null
 }
 

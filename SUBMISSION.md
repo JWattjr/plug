@@ -7,7 +7,7 @@
 - Arc mainnet contract explorer: https://explorer.arc.io/address/0xaa5364de35d65633ad031ff4da4f941e0de6f913
 - Deploy tx: https://explorer.arc.io/tx/0x2dd13174e4a4893176bb9782a03ba137c5b5e2a8c3babde2a7b136a7b8a4e5d1
 - Example mainnet txs (explorer.arc.io links):
-  - Create campaign: TODO
+  - Create campaign: https://explorer.arc.io/tx/0xad9b9e9037e81e9b104ee2834c6871a00d055cf8bec405db32e298d7f836a58c (campaign 0; 0.01 USDC budget funded on Arc mainnet, block 28995339).
   - Purchase with seller/agent split: TODO
   - End campaign refund: TODO
 - Video walkthrough: TODO
@@ -32,4 +32,4 @@ The seller chooses a 3 to 30 day protection window in the app and a public arbit
 - Arc Testnet contract address: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` (chain ID 5042002)
 - Arc Testnet contract explorer: https://explorer.testnet.arc.io/address/0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9
 
-The mainnet contract and deploy transaction are linked above. The three demo transactions, video walkthrough, and builder profile remain TODO. This document is a submission draft; no grant form has been submitted.
+The mainnet contract, deployment transaction, and confirmed campaign-funding transaction are linked above. Purchase with split, end-campaign refund, video walkthrough, and builder profile remain TODO. The campaign uses a demonstration title/offer URL; it is not evidence of a delivered product or a completed purchase. This document is a submission draft; no grant form has been submitted.

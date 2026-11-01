@@ -113,10 +113,13 @@ export function ApprovalNotice({ approval, onStartOver, needed }: { approval: Ap
           <button type="button" className="underline" onClick={onStartOver}>The transaction never appeared? Start over</button>
         </InfoNote>
       )}
-      {!failed && approval.reading && approval.reading.source !== 'rpc' && (
-        <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-          Read through {approval.reading.source === 'wallet' ? 'your wallet' : 'a direct Arc RPC call'} because the usual route did not answer.
-        </p>
+      {!failed && approval.reading && approval.reading.attempts.some((a) => !a.ok) && (
+        <div className="text-xs" style={{ color: 'var(--subtle)' }}>
+          <p>
+            Read through {approval.reading.source === 'wallet' ? 'your wallet' : 'a direct Arc RPC call'} because the usual route did not answer.
+          </p>
+          <Diagnostics lines={report} />
+        </div>
       )}
     </>
   )

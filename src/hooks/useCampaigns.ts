@@ -32,6 +32,8 @@ export function useCampaigns() {
     queryKey: [...PLUG_QUERY_KEY, 'campaigns', PLUG.address],
     enabled: PLUG_CONFIGURED && Boolean(client),
     refetchInterval: 10_000,
+    retry: 1,
+    retryDelay: 1_000,
     queryFn: async (): Promise<Campaign[]> => {
       if (!client || !PLUG.address) return []
       const count = await client.readContract({ address: PLUG.address, abi: plugAbi, functionName: 'campaignCount' })
@@ -44,20 +46,27 @@ export function useCampaigns() {
   })
 
   const campaigns = useMemo(() => query.data ?? [], [query.data])
-  return { campaigns, isLoading: query.isLoading, error: query.error, refetch: query.refetch }
+  return {
+    campaigns,
+    isLoading: query.isLoading,
+    /** True once the list was really read. Until then an empty `campaigns` means "unknown", never "none". */
+    isLoaded: query.data !== undefined,
+    error: query.error,
+    refetch: query.refetch,
+  }
 }
 
 /** Active, unexpired campaigns. */
 export function useLiveOffers() {
-  const { campaigns, isLoading, error } = useCampaigns()
+  const { campaigns, isLoading, isLoaded, error, refetch } = useCampaigns()
   const now = useNow()
   const offers = useMemo(() => campaigns.filter((c) => isLive(c, now)), [campaigns, now])
-  return { offers, isLoading, error, now }
+  return { offers, isLoading, isLoaded, error, now, refetch }
 }
 
 /** Totals across every campaign, computed from chain state. */
 export function useStats() {
-  const { campaigns, isLoading, error } = useCampaigns()
+  const { campaigns, isLoading, isLoaded, error } = useCampaigns()
   return useMemo(() => {
     let sales = 0n
     let commissionPaid = 0n
@@ -67,6 +76,6 @@ export function useStats() {
       commissionPaid += c.commissionPaid
       volume += c.sales * c.price
     }
-    return { campaigns: campaigns.length, sales, commissionPaid, volume, isLoading, error }
-  }, [campaigns, isLoading, error])
+    return { campaigns: campaigns.length, sales, commissionPaid, volume, isLoading, isLoaded, error }
+  }, [campaigns, isLoading, isLoaded, error])
 }

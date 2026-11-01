@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Check, Copy } from 'lucide-react'
 import { EmptyState, ErrorNote, Page, PageTitle, Skeleton } from '@/components/ui'
 import { OfferCard } from '@/components/OfferCard'
+import { ReadError } from '@/components/ReadStatus'
 import { useLiveOffers } from '@/hooks/useCampaigns'
 import { escapeForScriptTag, toOfferJson, type Campaign } from '@/lib/campaigns'
 import { PLUG, PLUG_CONFIGURED } from '@/plug.config'
@@ -103,7 +104,7 @@ function ForAgents({ offers }: { offers: Campaign[] }) {
 }
 
 export default function Offers() {
-  const { offers, isLoading, error, now } = useLiveOffers()
+  const { offers, isLoading, isLoaded, error, now, refetch } = useLiveOffers()
 
   return (
     <Page>
@@ -113,12 +114,14 @@ export default function Offers() {
       />
 
       {!PLUG_CONFIGURED && <ErrorNote>Plug is not configured for {PLUG.chainName}. Set the contract address and deploy block.</ErrorNote>}
-      {error && <ErrorNote>Could not read campaigns from the chain. Retrying.</ErrorNote>}
+      {error && isLoaded && <ErrorNote>Could not refresh campaigns from the chain. Showing the last data that was read. Retrying.</ErrorNote>}
 
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-72 !rounded-3xl" />)}
         </div>
+      ) : !isLoaded ? (
+        <ReadError what="live offers" error={error ?? new Error('Campaigns have not been read yet')} onRetry={() => void refetch()} />
       ) : offers.length === 0 ? (
         <EmptyState
           title="No live offers yet"

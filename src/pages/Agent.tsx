@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowUp, Bot, ShoppingBag, User } from 'lucide-react'
 import { ErrorNote, Page, PageTitle, SponsoredBadge } from '@/components/ui'
 import { ProtectionBadge } from '@/components/ProtectionBadge'
+import { ReadError } from '@/components/ReadStatus'
 import { useLiveOffers } from '@/hooks/useCampaigns'
 import { commissionPerSale, type Campaign } from '@/lib/campaigns'
 import { rankOffers, SPONSOR_DISCLOSURE } from '@/lib/matcher'
@@ -67,7 +68,7 @@ function AgentBubble({ message }: { message: Message }) {
 }
 
 export default function Agent() {
-  const { offers, isLoading, error } = useLiveOffers()
+  const { offers, isLoading, isLoaded, error, refetch } = useLiveOffers()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 0,
@@ -89,7 +90,9 @@ export default function Agent() {
     const matches = rankOffers(query, offers)
     const reply: Message = { id: nextId.current + 1, role: 'agent', text: '' }
 
-    if (matches.length === 0) {
+    if (!isLoaded) {
+      reply.text = 'I could not read the live offers from the chain yet, so I cannot recommend anything right now. Retry the read above, then ask me again.'
+    } else if (matches.length === 0) {
       reply.text =
         offers.length === 0
           ? 'There are no live offers on Plug right now, so I have nothing to recommend. Check back after a seller creates a campaign.'
@@ -128,7 +131,8 @@ export default function Agent() {
           <span>No demo agent address configured. Set VITE_DEMO_AGENT_ADDRESS to earn commission.</span>
         )}
       </div>
-      {error && <div className="mb-4"><ErrorNote>Could not read offers from the chain. Retrying.</ErrorNote></div>}
+      {error && !isLoaded && <div className="mb-4"><ReadError what="live offers" error={error} onRetry={() => void refetch()} /></div>}
+      {error && isLoaded && <div className="mb-4"><ErrorNote>Could not refresh offers from the chain. Using the last data that was read. Retrying.</ErrorNote></div>}
 
       <div className="card flex h-[60dvh] min-h-[420px] flex-col overflow-hidden">
         <div className="flex-1 space-y-5 overflow-y-auto p-5" aria-live="polite">

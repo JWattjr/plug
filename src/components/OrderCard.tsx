@@ -72,7 +72,7 @@ export function OrderCard({ order, campaign, logs, role, compact }: Props) {
   const buttons: React.ReactNode[] = []
   const btn = (key: string, label: string, onClick: () => void, kind: 'btn-primary' | 'btn-ghost' | 'btn-danger' = 'btn-ghost') =>
     buttons.push(
-      <button key={key} className={`btn ${kind}`} disabled={tx.busy} onClick={onClick} data-testid={`action-${key}`}>
+      <button key={key} className={`btn ${kind}`} disabled={tx.locked} onClick={onClick} data-testid={`action-${key}`}>
         {tx.busy && <Spinner />} {label}
       </button>,
     )
@@ -184,7 +184,7 @@ export function OrderCard({ order, campaign, logs, role, compact }: Props) {
           {byteLength(reason) > MAX_REASON_BYTES && <ErrorNote>Keep the reason under {MAX_REASON_BYTES} bytes.</ErrorNote>}
           <button
             className="btn btn-danger"
-            disabled={tx.busy || !reason.trim() || byteLength(reason) > MAX_REASON_BYTES}
+            disabled={tx.locked || !reason.trim() || byteLength(reason) > MAX_REASON_BYTES}
             data-testid="submit-dispute"
             onClick={() => send(() => tx.writeContractAsync({ ...base, functionName: 'dispute', args: [id, reason.trim()] }))}
           >
@@ -194,7 +194,7 @@ export function OrderCard({ order, campaign, logs, role, compact }: Props) {
       )}
 
       {buttons.length > 0 && <div className="flex flex-wrap gap-2">{buttons}</div>}
-      <TxNotice state={tx.state} />
+      <TxNotice state={tx.state} onCheck={() => void tx.checkStatus()} checking={tx.checking} />
       {tx.state.status === 'success' && status !== 'Pending' && <p className="text-xs" style={{ color: 'var(--success)' }}>Done.</p>}
       {order.status === STATUS.Released && delivered === 0n && order.commission > 0n && (
         <p className="text-xs" style={{ color: 'var(--subtle)' }}>The agent&apos;s commission could not be delivered and went back to the seller&apos;s budget.</p>

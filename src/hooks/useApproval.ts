@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { erc20Abi } from 'viem'
 import { useTx } from '@/hooks/useTx'
 import { useUsdcAllowance } from '@/hooks/useUsdc'
@@ -20,10 +20,20 @@ import { PLUG } from '@/plug.config'
  */
 export function useApproval(owner: `0x${string}` | undefined, required: bigint) {
   const allowance = useUsdcAllowance(owner)
-  const approveTx = useTx()
+  const [verifying, setVerifying] = useState(false)
+  const inFlight = useRef(false)
   const [proof, setProof] = useState<{ key: string; amount: bigint } | null>(null)
 
   const key = owner && PLUG.usdcAddress && PLUG.address ? approvalKey(PLUG.chainId, PLUG.usdcAddress, owner, PLUG.address) : undefined
+  // An approval confirmed later (status check or reload) is verified the same way as one confirmed in place.
+  const approveTx = useTx({
+    scope: 'approve-usdc',
+    onRecovered: (receipt) => {
+      if (!owner || !key || !PLUG.usdcAddress || !PLUG.address) return
+      const amount = approvedAmountFromReceipt(receipt, { token: PLUG.usdcAddress, owner, spender: PLUG.address })
+      if (amount > 0n) setProof({ key, amount })
+    },
+  })
   const receiptAmount = proof !== null && proof.key === key ? proof.amount : 0n
 
   const gate = resolveApprovalGate({
@@ -37,7 +47,7 @@ export function useApproval(owner: `0x${string}` | undefined, required: bigint) 
     },
   })
 
-  const unconfirmed = approveTx.state.status === 'error' && approveTx.state.hash !== undefined
+  const unconfirmed = approveTx.unresolved
 
   const { refetch } = allowance
   const retry = useCallback(() => {
@@ -50,21 +60,30 @@ export function useApproval(owner: `0x${string}` | undefined, required: bigint) 
   /** Returns true when the allowance covers `required` afterwards. Never sends on an unknown read. */
   const approve = useCallback(async (): Promise<boolean> => {
     if (!owner || !key || !PLUG.usdcAddress || !PLUG.address || required <= 0n) return false
+    // One approval attempt at a time: a second click while the allowance is being re-read must not send twice.
+    if (inFlight.current) return false
+    inFlight.current = true
     const token = PLUG.usdcAddress
     const spender = PLUG.address
+    try {
+      // Never pay for an approval on a stale or failed read.
+      setVerifying(true)
+      const fresh = await refetch()
+      setVerifying(false)
+      if (fresh.isError || fresh.data === undefined) return false
+      if (fresh.data.value >= required) return true
 
-    // Never pay for an approval on a stale or failed read.
-    const fresh = await refetch()
-    if (fresh.isError || fresh.data === undefined) return false
-    if (fresh.data.value >= required) return true
-
-    const receipt = await approveTx.run(() =>
-      approveTx.writeContractAsync({ address: token, abi: erc20Abi, functionName: 'approve', args: [spender, required], chainId: PLUG.chainId }),
-    )
-    if (!receipt) return false
-    const amount = approvedAmountFromReceipt(receipt, { token, owner, spender })
-    if (amount > 0n) setProof({ key, amount })
-    return true
+      const receipt = await approveTx.run(() =>
+        approveTx.writeContractAsync({ address: token, abi: erc20Abi, functionName: 'approve', args: [spender, required], chainId: PLUG.chainId }),
+      )
+      if (!receipt) return false
+      const amount = approvedAmountFromReceipt(receipt, { token, owner, spender })
+      if (amount > 0n) setProof({ key, amount })
+      return true
+    } finally {
+      setVerifying(false)
+      inFlight.current = false
+    }
   }, [approveTx, key, owner, refetch, required])
 
   return {
@@ -73,6 +92,8 @@ export function useApproval(owner: `0x${string}` | undefined, required: bigint) 
     retry,
     retrying: allowance.isFetching,
     approveTx,
+    /** Re-reading the allowance or waiting on the wallet or chain for an approval. */
+    busy: verifying || approveTx.busy,
     unconfirmed,
     clearProof,
     owner,

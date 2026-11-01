@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Scale } from 'lucide-react'
 import { EmptyState, InfoNote, Page, PageTitle, Skeleton } from '@/components/ui'
 import { OrderCard } from '@/components/OrderCard'
+import { ReadError } from '@/components/ReadStatus'
 import { useCampaigns } from '@/hooks/useCampaigns'
 import { useOrders, usePlugLogs } from '@/hooks/useOrders'
 import { useWalletGate } from '@/hooks/useWalletGate'
@@ -11,8 +12,8 @@ import { campaignOf, STATUS } from '@/lib/orders'
 /** /arbiter: contested orders on campaigns where the connected wallet is the arbiter. */
 export default function Arbiter() {
   const gate = useWalletGate()
-  const { orders, isLoading } = useOrders()
-  const { campaigns, isLoading: loadingCampaigns } = useCampaigns()
+  const { orders, isLoading, isLoaded: ordersLoaded, error: ordersError, refetch: refetchOrders } = useOrders()
+  const { campaigns, isLoading: loadingCampaigns, isLoaded: campaignsLoaded, error: campaignsError, refetch: refetchCampaigns } = useCampaigns()
   const { logs } = usePlugLogs()
 
   const myCampaignIds = useMemo(
@@ -34,6 +35,12 @@ export default function Arbiter() {
         <InfoNote>Connect the wallet that was named as arbiter on a campaign.</InfoNote>
       ) : isLoading || loadingCampaigns ? (
         <Skeleton className="h-60 !rounded-3xl" />
+      ) : !ordersLoaded || !campaignsLoaded ? (
+        <ReadError
+          what="arbiter duties"
+          error={ordersError ?? campaignsError ?? new Error('Not read yet')}
+          onRetry={() => void Promise.all([refetchOrders(), refetchCampaigns()])}
+        />
       ) : myCampaignIds.size === 0 ? (
         <EmptyState title="You are not an arbiter on any campaign" body="Sellers name an arbiter when they create a protected campaign. Campaigns that name this wallet will appear here." />
       ) : contested.length === 0 ? (

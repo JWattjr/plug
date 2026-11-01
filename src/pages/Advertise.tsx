@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { isAddress, parseEventLogs } from 'viem'
+import { isAddress, parseEventLogs, type TransactionReceipt } from 'viem'
 import { ArrowRight, Check, ShieldCheck } from 'lucide-react'
 import { ErrorNote, InfoNote, Page, PageTitle, Spinner, Step, TxNotice, type StepStatus } from '@/components/ui'
 import { AllowanceSummary, ApprovalHoldButton, ApprovalNotice, holdsApproval } from '@/components/ApprovalNotice'
@@ -54,7 +54,7 @@ const decimalOnly = (value: string) => (/^\d*\.?\d*$/.test(value) ? value : null
 export default function Advertise() {
   const gate = useWalletGate()
   const balance = useUsdcBalance(gate.address)
-  const createTx = useTx()
+  const createTx = useTx({ scope: 'create-campaign', onRecovered: (receipt) => handleCreated(receipt) })
   const [form, setForm] = useState<FormState>(INITIAL)
   const [touched, setTouched] = useState(false)
   const [createdId, setCreatedId] = useState<bigint | null>(null)
@@ -107,8 +107,19 @@ export default function Advertise() {
     await approval.approve()
   }
 
+  /** Show the campaign a confirmed createCampaign made. Runs for a fresh send and for a later status check alike. */
+  function handleCreated(receipt: TransactionReceipt) {
+    const [event] = parseEventLogs({ abi: plugAbi, logs: receipt.logs, eventName: 'CampaignCreated' }).filter((log) => sameAddress(log.address, PLUG.address))
+    setCreatedId(event?.args.id ?? null)
+    setForm(INITIAL)
+    setTouched(false)
+    approval.clearProof()
+  }
+
   async function create() {
     setTouched(true)
+    // A campaign transaction that was sent but not confirmed must be checked, never sent again.
+    if (createTx.unresolved || createTx.busy) return
     if (!valid || parsed.price === undefined || !PLUG.address) return
     if (approvalGate.kind !== 'ready' && approvalGate.kind !== 'none') return
     const endTime = BigInt(nowSeconds() + parsed.days * 86_400)
@@ -130,30 +141,30 @@ export default function Advertise() {
         chainId: PLUG.chainId,
       }),
     )
-    if (receipt) {
-      const [event] = parseEventLogs({ abi: plugAbi, logs: receipt.logs, eventName: 'CampaignCreated' })
-      setCreatedId(event?.args.id ?? null)
-      setForm(INITIAL)
-      setTouched(false)
-      approval.clearProof()
-    }
+    if (receipt) handleCreated(receipt)
   }
 
   const approveStatus: StepStatus = approvalGate.kind === 'ready' || approvalGate.kind === 'none' ? 'done' : 'active'
   const createStatus: StepStatus = approveStatus === 'done' ? 'active' : 'todo'
-  const busy = approveTx.busy || createTx.busy
+  const busy = approval.busy || createTx.busy
 
   let action: React.ReactNode
   if (!gate.isConnected) {
     action = <button className="btn btn-primary w-full" onClick={gate.connect}>Connect wallet to continue</button>
   } else if (gate.wrongNetwork) {
     action = <button className="btn btn-primary w-full" onClick={gate.switchNetwork}>Switch to {PLUG.chainName}</button>
+  } else if (createTx.unresolved) {
+    action = (
+      <button className="btn btn-primary w-full" disabled={createTx.checking} onClick={() => void createTx.checkStatus()}>
+        {createTx.checking ? <Spinner /> : null} Check campaign transaction status
+      </button>
+    )
   } else if (holdApproval) {
     action = <ApprovalHoldButton approval={approval} disabled={busy} />
   } else if (needsApproval) {
     action = (
       <button className="btn btn-primary w-full" disabled={busy || (touched && !valid)} onClick={() => void approve()}>
-        {approveTx.busy ? <Spinner /> : null} Step 1 of 2: Allow {fmtUsdc(budget)}
+        {approval.busy ? <Spinner /> : null} Step 1 of 2: Allow {fmtUsdc(budget)}
       </button>
     )
   } else {
@@ -266,8 +277,8 @@ export default function Advertise() {
 
           {action}
           {gate.isConnected && !gate.wrongNetwork && <><AllowanceSummary approval={approval} /><ApprovalNotice approval={approval} onStartOver={approveTx.reset} needed={budget} /></>}
-          <TxNotice state={approveTx.state} />
-          <TxNotice state={createTx.state} />
+          <TxNotice state={approveTx.state} onCheck={() => void approveTx.checkStatus()} checking={approveTx.checking} />
+          <TxNotice state={createTx.state} onCheck={() => void createTx.checkStatus()} checking={createTx.checking} />
 
           {createdId !== null && createTx.state.status === 'success' && (
             <div className="inner flex flex-wrap items-center justify-between gap-3 p-4">

@@ -45,18 +45,28 @@ export function usdcAllowanceKey(owner?: string, spender?: string) {
   return [...PLUG_QUERY_KEY, 'usdc-allowance', PLUG.chainId, PLUG.usdcAddress?.toLowerCase(), owner?.toLowerCase(), spender?.toLowerCase()] as const
 }
 
-/** Endpoints for the direct (unbatched) read path. Tests swap in a fake transport. */
-export const allowanceTransports = { direct: (): Transport => rpcTransport(PLUG.rpcUrls) }
+/**
+ * Public-endpoint-only transport for the allowance read. Its two routes (batched, direct) must stay
+ * on the public endpoints so a failure there is reported as such; the wallet route is explicit and
+ * labelled separately. Tests swap in a fake transport.
+ */
+export const allowanceTransports = { http: (): Transport => rpcTransport(PLUG.rpcUrls) }
 
+let batchedClient: PublicClient | undefined
 let directClient: PublicClient | undefined
+function getBatchedClient(): PublicClient {
+  batchedClient ??= createPublicClient({ chain: PLUG.chain, transport: allowanceTransports.http(), batch: { multicall: true } }) as PublicClient
+  return batchedClient
+}
 function getDirectClient(): PublicClient {
-  // A plain client: no multicall batching, so this is a single eth_call to the USDC contract.
-  directClient ??= createPublicClient({ chain: PLUG.chain, transport: allowanceTransports.direct() }) as PublicClient
+  // No multicall batching: a single eth_call to the USDC contract.
+  directClient ??= createPublicClient({ chain: PLUG.chain, transport: allowanceTransports.http() }) as PublicClient
   return directClient
 }
 
-/** Test hook: forget the cached direct client after swapping its transport. */
-export function resetDirectAllowanceClient(): void {
+/** Test hook: forget cached clients after swapping the transport. */
+export function resetAllowanceClients(): void {
+  batchedClient = undefined
   directClient = undefined
 }
 
@@ -68,11 +78,10 @@ export function resetDirectAllowanceClient(): void {
  * holding every attempt, so the screen can show the real cause.
  */
 export function useUsdcAllowance(owner?: `0x${string}`) {
-  const client = usePublicClient({ chainId: PLUG.chainId })
   const { connector } = useAccount()
   return useQuery<AllowanceReading>({
     queryKey: usdcAllowanceKey(owner, PLUG.address),
-    enabled: Boolean(owner && client && PLUG.usdcAddress && PLUG.address),
+    enabled: Boolean(owner && PLUG.usdcAddress && PLUG.address),
     refetchInterval: 8_000,
     refetchOnWindowFocus: 'always',
     refetchOnMount: 'always',
@@ -88,7 +97,7 @@ export function useUsdcAllowance(owner?: `0x${string}`) {
         owner: owner!,
         spender,
         rpcHosts: PLUG.rpcUrls.map(rpcHost),
-        readBatched: () => readUsdcAllowance(client as unknown as AllowanceReader, token, owner!, spender),
+        readBatched: () => readUsdcAllowance(getBatchedClient(), token, owner!, spender),
         readDirect: () => readUsdcAllowance(getDirectClient(), token, owner!, spender),
         getWalletProvider: async () => (await connector?.getProvider?.()) as ReadOnlyProvider | undefined,
       })
