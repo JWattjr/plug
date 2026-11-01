@@ -11,7 +11,7 @@
   - Purchase with seller/agent split: TODO
   - End campaign refund: TODO
 - Video walkthrough: https://youtu.be/7otQT6IlFR8
-- Builder profile: TODO
+- Builder profile: https://dorahacks.io/builder/runexbt
 
 ## Description (3 sentences)
 
@@ -32,4 +32,4 @@ The seller chooses a 3 to 30 day protection window in the app and a public arbit
 - Arc Testnet contract address: `0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9` (chain ID 5042002)
 - Arc Testnet contract explorer: https://explorer.testnet.arc.io/address/0x2e90b00fe5b9289b2aa1e37ac8b5f8e9afb6ffd9
 
-The mainnet contract, deployment transaction, confirmed campaign-funding transaction, and video walkthrough are linked above. Purchase with split, end-campaign refund, and builder profile remain TODO. The campaign uses a demonstration title/offer URL; it is not evidence of a delivered product or a completed purchase. This document is a submission draft; no grant form has been submitted.
+The mainnet contract, deployment transaction, confirmed campaign-funding transaction, video walkthrough, and verified builder profile are linked above. Purchase with split and end-campaign refund remain TODO. The campaign uses a demonstration title/offer URL; it is not evidence of a delivered product or a completed purchase. This document is a submission draft; no grant form has been submitted.
